@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import {
   AttackStyle, EquipSlot, GameState, LogKind, Monster, Settings, SkillId, StatKey, WorldState,
 } from '../game/types';
+
 import { ITEMS } from '../game/items';
 import { GATHER_MAP, THIEVE_MAP } from '../game/actions';
 import { RECIPE_MAP } from '../game/recipes';
@@ -102,8 +103,9 @@ function initialState(): GameState {
     achievements: [],
     stats: { ...ZERO_STATS },
     settings: { autoEat: true, autoEatThreshold: 0.4 },
-    log: [{ id: 0, text: 'Welcome to Skillbound! Walk with WASD/arrows or click. Click trees, rocks and monsters to act on them.', kind: 'info' }],
+    log: [{ id: 0, text: 'Welcome to Skillbound! Click the ground to walk (WASD works too), drag or press Q/E to spin the camera, and click trees, rocks, folk and monsters to act on them.', kind: 'info' }],
     logCounter: 1,
+    fx: [],
   };
 }
 
@@ -112,6 +114,12 @@ function initialState(): GameState {
 function pushLog(s: GameState, text: string, kind: LogKind = 'info') {
   s.log.unshift({ id: s.logCounter++, text, kind });
   if (s.log.length > LOG_LIMIT) s.log.length = LOG_LIMIT;
+}
+
+/** Record a hit splat for the 3D renderer. amount null = miss. */
+function pushFx(s: GameState, target: 'player' | 'monster', amount: number | null) {
+  s.fx.push({ id: s.logCounter++, target, amount });
+  if (s.fx.length > 12) s.fx.splice(0, s.fx.length - 12);
 }
 
 function addItem(s: GameState, itemId: string, qty: number) {
@@ -208,8 +216,10 @@ function monsterAttacks(s: GameState, m: Monster) {
     const dmg = reduceIncoming(s, 1 + Math.floor(Math.random() * m.maxHit));
     s.currentHp -= dmg;
     s.stats.damageTaken += dmg;
+    pushFx(s, 'player', dmg);
     pushLog(s, `${m.icon} ${m.name} hits you for ${dmg}.`, 'combat');
   } else {
+    pushFx(s, 'player', null);
     pushLog(s, `${m.icon} ${m.name} misses you.`, 'combat');
   }
   if (s.currentHp <= 0) {
@@ -260,8 +270,10 @@ function playerAttacks(s: GameState, m: Monster): boolean {
     dmg = Math.min(dmg, s.activity.monsterHp);
     s.activity.monsterHp -= dmg;
     s.stats.damageDealt += dmg;
+    pushFx(s, 'monster', dmg);
     pushLog(s, `⚔️ You hit ${m.name} for ${dmg}.`, 'combat');
   } else {
+    pushFx(s, 'monster', null);
     pushLog(s, `⚔️ You miss ${m.name}.`, 'combat');
   }
   if (dmg > 0) {
@@ -555,6 +567,7 @@ export function loadState(): GameState {
       settings: { ...base.settings, ...(saved.settings ?? {}) },
       quests: saved.quests ?? {},
       achievements: saved.achievements ?? [],
+      fx: [],
     };
     // Pre-world saves: activities and fights referenced nothing in the world
     if (s.activity?.type === 'gather' && !s.activity.nodeKey) s.activity = null;
@@ -696,6 +709,7 @@ function reduceInner(state: GameState, action: Action): GameState {
         return s;
       }
       s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp };
+      s.autoCombat = true; // auto-retaliate; the Attack button squeezes in extra swings
       pushLog(s, `${m.icon} You engage ${m.name}${m.boss ? ' — a mighty boss' : ''}!`, 'combat');
       return s;
     }
@@ -710,6 +724,7 @@ function reduceInner(state: GameState, action: Action): GameState {
         return s;
       }
       s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp, entityUid: ent.uid };
+      s.autoCombat = true; // auto-retaliate; the Attack button squeezes in extra swings
       pushLog(s, `${m.icon} You engage ${m.name}!`, 'combat');
       return s;
     }

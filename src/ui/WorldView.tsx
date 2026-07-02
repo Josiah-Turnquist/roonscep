@@ -1,45 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
 import { useDispatch, useGame } from '../state/store';
 import {
-  LAIR_BY_CHAR, MAP_H, MAP_W, NPCS, NpcDef, RESOURCE_BY_CHAR, STATION_BY_CHAR, StationType,
-  isWalkable, tileAt, zoneName,
+  BOSS_LAIRS, MAP_W, NPCS, STATIONS, StationType, isWalkable, zoneName,
 } from '../game/world';
 import { MONSTER_MAP } from '../game/monsters';
 import { GATHER_MAP } from '../game/actions';
-import { GameState } from '../game/types';
+import { GameState, MonsterEntity } from '../game/types';
+import {
+  buildPlayer, buildWorld, makeEmojiSprite, tilePos, WorldHandles,
+} from './three/worldBuilder';
 import { NpcDialog, StationDialog } from './Dialogs';
-import FightView from './FightView';
+import CombatHud from './CombatHud';
 
-const TILE = 28;
-const VIEW_W = 25;
-const VIEW_H = 15;
+// ——— tile pathfinding (identical rules to the reducer) ———
 
-const TERRAIN_COLOR: Record<string, string> = {
-  '.': '#3f6b2e', ',': '#8a7a54', ':': '#6b5f4d', _: '#44503a', '*': '#c6d3d8',
-  '%': '#53271e', '!': '#221833', '~': '#2b5d8a', '#': '#3b332a', '=': '#7a5c3e',
-};
-
-const RESOURCE_EMOJI: Record<string, string> = {
-  T: '🌳', O: '🌳', W: '🌳', P: '🍁', Y: '🌲', G: '🎄',
-  '1': '🪨', '2': '🪨', '3': '🪨', '4': '🪨', '5': '🪨', '6': '🪨', '7': '🪨',
-  f: '🐟', g: '🐟', j: '🐟', l: '🦞', w: '🐠', x: '🦈',
-  b: '🫐', z: '🌾', q: '🌿', d: '☘️', e: '🍀', n: '🥀', o: '🍎', v: '🍄',
-  U: '🔥', A: '⚒️', R: '🍲',
-  K: '☠️', E: '🌋', F: '🐲', X: '👑', V: '🌑', N: '👁️',
-};
-
-const TIER_DOT: Record<string, string> = {
-  O: '#e8b64c', W: '#9ad0ff', P: '#e07b39', Y: '#2e7d32', G: '#b48ee0',
-  '1': '#e07b39', '2': '#e6e6e6', '3': '#8a5a3b', '4': '#222222', '5': '#5a79d6', '6': '#4f9e3c', '7': '#59d1e0',
-};
-
-function camera(s: GameState): [number, number] {
-  const camX = Math.max(0, Math.min(s.world.px - Math.floor(VIEW_W / 2), MAP_W - VIEW_W));
-  const camY = Math.max(0, Math.min(s.world.py - Math.floor(VIEW_H / 2), MAP_H - VIEW_H));
-  return [camX, camY];
-}
-
-/** BFS from (sx,sy) to the nearest tile satisfying isGoal; returns step deltas. */
 function findPath(
   sx: number,
   sy: number,
@@ -68,7 +43,6 @@ function findPath(
     }
   }
   if (!goal) return null;
-  // Walk back through prev to build the step list
   const tiles: [number, number][] = [];
   let cur = key(goal[0], goal[1]);
   const start = key(sx, sy);
@@ -85,21 +59,76 @@ function findPath(
   return steps;
 }
 
-export type DialogState =
+type DialogState =
   | { kind: 'npc'; npcId: string }
   | { kind: 'station'; station: StationType }
   | null;
 
+interface Splat {
+  sprite: THREE.Sprite;
+  born: number;
+}
+
+function makeSplatSprite(amount: number | null): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 96;
+  const ctx = canvas.getContext('2d')!;
+  ctx.beginPath();
+  ctx.arc(48, 48, 34, 0, Math.PI * 2);
+  ctx.fillStyle = amount === null ? '#2f5f9a' : '#b22222';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.font = 'bold 40px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(amount === null ? '0' : String(amount), 48, 50);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(0.55, 0.55, 1);
+  s.renderOrder = 5;
+  return s;
+}
+
+function makeHpBarSprite(): { sprite: THREE.Sprite; draw: (frac: number) => void } {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 20;
+  const ctx = canvas.getContext('2d')!;
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.scale.set(1.0, 0.16, 1);
+  sprite.renderOrder = 4;
+  let last = -1;
+  const draw = (frac: number) => {
+    if (Math.abs(frac - last) < 0.01) return;
+    last = frac;
+    ctx.clearRect(0, 0, 128, 20);
+    ctx.fillStyle = '#8a1f1f';
+    ctx.fillRect(0, 0, 128, 20);
+    ctx.fillStyle = '#3fae35';
+    ctx.fillRect(0, 0, Math.max(0, Math.round(128 * frac)), 20);
+    tex.needsUpdate = true;
+  };
+  return { sprite, draw };
+}
+
 export default function WorldView() {
   const s = useGame();
   const dispatch = useDispatch();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef(s);
   stateRef.current = s;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const hoverRef = useRef<string | null>(null);
+
   const pathRef = useRef<[number, number][]>([]);
   const pendingRef = useRef<(() => void) | null>(null);
   const walkTimer = useRef<number | null>(null);
-  const [dialog, setDialog] = useState<DialogState>(null);
 
   const stopWalking = useCallback(() => {
     pathRef.current = [];
@@ -133,234 +162,445 @@ export default function WorldView() {
     [dispatch, stopWalking],
   );
 
-  // Click-to-act
-  const onCanvasClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  useEffect(() => {
+    const container = containerRef.current!;
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.className = 'world-canvas3d';
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x8fb2d4);
+    scene.fog = new THREE.Fog(0x8fb2d4, 28, 62);
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+
+    scene.add(new THREE.HemisphereLight(0xdfeaff, 0x3a4a2c, 0.95));
+    const sun = new THREE.DirectionalLight(0xfff2d0, 1.35);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -24;
+    sun.shadow.camera.right = 24;
+    sun.shadow.camera.top = 24;
+    sun.shadow.camera.bottom = -24;
+    sun.shadow.camera.far = 120;
+    sun.shadow.bias = -0.002;
+    scene.add(sun);
+    scene.add(sun.target);
+
+    const world: WorldHandles = buildWorld(scene);
+
+    // player
+    const player = buildPlayer();
+    const st0 = stateRef.current;
+    player.position.copy(tilePos(st0.world.px, st0.world.py));
+    scene.add(player);
+
+    // monster entities
+    const entitySprites = new Map<number, THREE.Sprite>();
+    for (const e of st0.world.entities) {
+      const def = MONSTER_MAP[e.defId];
+      const size = 0.8 + Math.min(1.1, def.hp / 140);
+      const sprite = makeEmojiSprite(def.icon, size);
+      sprite.position.copy(tilePos(e.x, e.y));
+      sprite.userData = {
+        kind: 'monster', uid: e.uid,
+        label: `${def.name} (❤️ ${def.hp}${def.slayerReq ? `, slayer ${def.slayerReq}` : ''}) — click to attack`,
+      };
+      world.interactables.add(sprite);
+      entitySprites.set(e.uid, sprite);
+    }
+
+    // fight visuals: shared hp bar + target ring + lazy boss sprite
+    const hpBar = makeHpBarSprite();
+    hpBar.sprite.visible = false;
+    scene.add(hpBar.sprite);
+    const targetRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.4, 0.52, 24),
+      new THREE.MeshBasicMaterial({ color: 0xd9534f, transparent: true, opacity: 0.8, side: THREE.DoubleSide }),
+    );
+    targetRing.rotation.x = -Math.PI / 2;
+    targetRing.visible = false;
+    scene.add(targetRing);
+    let bossSprite: THREE.Sprite | null = null;
+    let bossFor: string | null = null;
+
+    // transient effects
+    const splats: Splat[] = [];
+    const markers: { mesh: THREE.Mesh; born: number }[] = [];
+    let lastFxId = stateRef.current.fx.reduce((m, f) => Math.max(m, f.id), 0);
+
+    // camera state
+    const cam = { yaw: 0.2, pitch: 0.95, dist: 13 };
+    const focus = player.position.clone();
+    const keys = new Set<string>();
+    let dragging = false;
+    let lastMouse: { x: number; y: number } | null = null;
+    let dragLast = { x: 0, y: 0 };
+
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+
+    function pick(clientX: number, clientY: number): { kind: string; [k: string]: unknown } | null {
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const hits = raycaster.intersectObjects(world.pickables, true);
+      for (const h of hits) {
+        let o: THREE.Object3D | null = h.object;
+        while (o && !o.userData?.kind) o = o.parent;
+        if (!o) continue;
+        if (o.userData.kind === 'terrain') {
+          return { kind: 'terrain', x: Math.floor(h.point.x), y: Math.floor(h.point.z), point: h.point };
+        }
+        if (!(o as THREE.Object3D & { visible: boolean }).visible) continue;
+        return o.userData as { kind: string };
+      }
+      return null;
+    }
+
+    function spawnMarker(point: THREE.Vector3) {
+      const mesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.16, 0.26, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffe14d, transparent: true, opacity: 0.95, side: THREE.DoubleSide }),
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(point.x, point.y + 0.05, point.z);
+      scene.add(mesh);
+      markers.push({ mesh, born: performance.now() });
+    }
+
+    function fightTargetPos(st: GameState): THREE.Vector3 | null {
+      if (st.activity?.type !== 'combat') return null;
+      if (st.activity.entityUid !== undefined) {
+        const sp = entitySprites.get(st.activity.entityUid);
+        return sp ? sp.position : null;
+      }
+      const lair = BOSS_LAIRS[st.activity.monsterId];
+      return lair ? tilePos(lair.x, lair.y).add(new THREE.Vector3(0, 0.2, 0)) : null;
+    }
+
+    // ——— input ———
+
+    const onClick = (e: MouseEvent) => {
+      if (e.button !== 0) return;
       const st = stateRef.current;
       if (st.activity?.type === 'combat') return;
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const [camX, camY] = camera(st);
-      const tx = camX + Math.floor(((e.clientX - rect.left) / rect.width) * VIEW_W);
-      const ty = camY + Math.floor(((e.clientY - rect.top) / rect.height) * VIEW_H);
+      const hit = pick(e.clientX, e.clientY);
+      if (!hit) return;
       const adj = (x: number, y: number) => (gx: number, gy: number) =>
         Math.max(Math.abs(gx - x), Math.abs(gy - y)) <= 1 && isWalkable(gx, gy);
-      const goTo = (x: number, y: number, act: (() => void) | null) => {
+      const goAdj = (x: number, y: number, act: () => void) => {
         const path = findPath(st.world.px, st.world.py, adj(x, y));
-        if (path) startWalking(path, act);
+        if (path) {
+          spawnMarker(tilePos(x, y));
+          startWalking(path, act);
+        }
       };
-
-      const ent = st.world.entities.find((en) => en.respawn === 0 && en.x === tx && en.y === ty);
-      if (ent) {
-        goTo(tx, ty, () => dispatch({ type: 'START_COMBAT_ENTITY', uid: ent.uid }));
-        return;
-      }
-      const npc = NPCS.find((n) => n.x === tx && n.y === ty);
-      if (npc) {
-        goTo(tx, ty, () => setDialog({ kind: 'npc', npcId: npc.id }));
-        return;
-      }
-      const char = tileAt(tx, ty);
-      if (RESOURCE_BY_CHAR[char]) {
-        goTo(tx, ty, () => dispatch({ type: 'START_GATHER_NODE', x: tx, y: ty }));
-        return;
-      }
-      const station = STATION_BY_CHAR[char];
-      if (station) {
-        goTo(tx, ty, () => setDialog({ kind: 'station', station }));
-        return;
-      }
-      const bossId = LAIR_BY_CHAR[char];
-      if (bossId) {
-        goTo(tx, ty, () => dispatch({ type: 'START_COMBAT', id: bossId }));
-        return;
-      }
-      if (isWalkable(tx, ty)) {
-        const path = findPath(st.world.px, st.world.py, (gx, gy) => gx === tx && gy === ty);
-        if (path) startWalking(path, null);
-      }
-    },
-    [dispatch, startWalking],
-  );
-
-  // Keyboard movement
-  useEffect(() => {
-    const KEYS: Record<string, [number, number]> = {
-      ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-      w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
-      W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0],
-    };
-    const held = { dir: null as [number, number] | null, timer: null as number | null };
-    const step = () => {
-      if (held.dir) dispatch({ type: 'MOVE_STEP', dx: held.dir[0], dy: held.dir[1] });
-    };
-    const down = (e: KeyboardEvent) => {
-      const dir = KEYS[e.key];
-      if (!dir) return;
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-      e.preventDefault();
-      stopWalking();
-      if (held.dir && held.dir[0] === dir[0] && held.dir[1] === dir[1]) return;
-      held.dir = dir;
-      step();
-      if (held.timer === null) held.timer = window.setInterval(step, 150);
-    };
-    const up = (e: KeyboardEvent) => {
-      if (KEYS[e.key]) {
-        held.dir = null;
-        if (held.timer !== null) {
-          window.clearInterval(held.timer);
-          held.timer = null;
-        }
-      }
-    };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-      if (held.timer !== null) window.clearInterval(held.timer);
-    };
-  }, [dispatch, stopWalking]);
-
-  // Render
-  useEffect(() => {
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    const [camX, camY] = camera(s);
-    ctx.clearRect(0, 0, VIEW_W * TILE, VIEW_H * TILE);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (let vy = 0; vy < VIEW_H; vy++) {
-      for (let vx = 0; vx < VIEW_W; vx++) {
-        const x = camX + vx;
-        const y = camY + vy;
-        const char = tileAt(x, y);
-        const base = TERRAIN_COLOR[char] ?? TERRAIN_COLOR[terrainUnder(x, y)] ?? '#3f6b2e';
-        ctx.fillStyle = base;
-        ctx.fillRect(vx * TILE, vy * TILE, TILE, TILE);
-        if ((x + y) % 2 === 0) {
-          ctx.fillStyle = 'rgba(0,0,0,0.05)';
-          ctx.fillRect(vx * TILE, vy * TILE, TILE, TILE);
-        }
-        const emoji = RESOURCE_EMOJI[char];
-        if (emoji) {
-          const nodeKey = `${x},${y}`;
-          if (s.world.nodeRespawn[nodeKey]) {
-            ctx.fillStyle = 'rgba(0,0,0,0.35)';
-            ctx.beginPath();
-            ctx.arc(vx * TILE + TILE / 2, vy * TILE + TILE / 2, 5, 0, Math.PI * 2);
-            ctx.fill();
-          } else {
-            if (LAIR_BY_CHAR[char]) {
-              ctx.fillStyle = 'rgba(0,0,0,0.45)';
-              ctx.beginPath();
-              ctx.arc(vx * TILE + TILE / 2, vy * TILE + TILE / 2, TILE / 2 - 2, 0, Math.PI * 2);
-              ctx.fill();
-            }
-            ctx.font = '18px serif';
-            ctx.fillText(emoji, vx * TILE + TILE / 2, vy * TILE + TILE / 2 + 1);
-            const dot = TIER_DOT[char];
-            if (dot) {
-              ctx.fillStyle = dot;
-              ctx.beginPath();
-              ctx.arc(vx * TILE + TILE - 5, vy * TILE + 5, 3, 0, Math.PI * 2);
-              ctx.fill();
-            }
+      if (hit.kind === 'monster') {
+        const uid = hit.uid as number;
+        const ent = st.world.entities.find((en) => en.uid === uid);
+        if (ent && ent.respawn === 0) goAdj(ent.x, ent.y, () => dispatch({ type: 'START_COMBAT_ENTITY', uid }));
+      } else if (hit.kind === 'npc') {
+        const npc = NPCS.find((n) => n.id === hit.id)!;
+        goAdj(npc.x, npc.y, () => setDialog({ kind: 'npc', npcId: npc.id }));
+      } else if (hit.kind === 'resource') {
+        const x = hit.x as number;
+        const y = hit.y as number;
+        goAdj(x, y, () => dispatch({ type: 'START_GATHER_NODE', x, y }));
+      } else if (hit.kind === 'station') {
+        const type = hit.station as StationType;
+        const found = stationTile(type, st);
+        if (found) goAdj(found.x, found.y, () => setDialog({ kind: 'station', station: type }));
+      } else if (hit.kind === 'lair') {
+        const lair = BOSS_LAIRS[hit.bossId as string];
+        goAdj(lair.x, lair.y, () => dispatch({ type: 'START_COMBAT', id: hit.bossId as string }));
+      } else if (hit.kind === 'terrain') {
+        const x = hit.x as number;
+        const y = hit.y as number;
+        if (isWalkable(x, y)) {
+          const path = findPath(st.world.px, st.world.py, (gx, gy) => gx === x && gy === y);
+          if (path) {
+            spawnMarker(hit.point as THREE.Vector3);
+            startWalking(path, null);
           }
         }
       }
-    }
-    // NPCs
-    ctx.font = '18px serif';
-    for (const n of NPCS) {
-      if (n.x < camX || n.x >= camX + VIEW_W || n.y < camY || n.y >= camY + VIEW_H) continue;
-      ctx.fillText(n.icon, (n.x - camX) * TILE + TILE / 2, (n.y - camY) * TILE + TILE / 2 + 1);
-      if (n.kind === 'quest') {
-        ctx.fillStyle = '#e8b64c';
-        ctx.font = 'bold 11px serif';
-        ctx.fillText('!', (n.x - camX) * TILE + TILE - 5, (n.y - camY) * TILE + 6);
-        ctx.font = '18px serif';
-      }
-    }
-    // Monsters
-    const fightingUid = s.activity?.type === 'combat' ? s.activity.entityUid : undefined;
-    for (const en of s.world.entities) {
-      if (en.respawn > 0) continue;
-      if (en.x < camX || en.x >= camX + VIEW_W || en.y < camY || en.y >= camY + VIEW_H) continue;
-      const def = MONSTER_MAP[en.defId];
-      const cx = (en.x - camX) * TILE + TILE / 2;
-      const cy = (en.y - camY) * TILE + TILE / 2;
-      if (en.uid === fightingUid || s.slayerTask?.monsterId === en.defId) {
-        ctx.strokeStyle = en.uid === fightingUid ? '#d9534f' : '#b48ee0';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, TILE / 2 - 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.fillText(def.icon, cx, cy + 1);
-    }
-    // Player
-    const pcx = (s.world.px - camX) * TILE + TILE / 2;
-    const pcy = (s.world.py - camY) * TILE + TILE / 2;
-    ctx.strokeStyle = '#e8dcc0';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(pcx, pcy, TILE / 2 - 2, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.font = '19px serif';
-    ctx.fillText(s.stunnedTicks > 0 ? '💫' : '🧙', pcx, pcy + 1);
-  }, [s]);
+    };
 
-  const activityLabel = (() => {
-    if (!s.activity) return null;
-    if (s.activity.type === 'gather') {
-      const a = GATHER_MAP[s.activity.actionId];
-      return `${a.icon} ${a.name}…`;
+    // Nearest station tile of a type to the player (for walking to it)
+    function stationTile(type: StationType, st: GameState): { x: number; y: number } | null {
+      let best: { x: number; y: number } | null = null;
+      let bestD = Infinity;
+      for (const stn of STATIONS) {
+        if (stn.type !== type) continue;
+        const d = Math.abs(stn.x - st.world.px) + Math.abs(stn.y - st.world.py);
+        if (d < bestD) {
+          bestD = d;
+          best = stn;
+        }
+      }
+      return best;
     }
-    if (s.activity.type === 'thieve') return '🎭 Pickpocketing…';
-    if (s.activity.type === 'craft') return '🔨 Working…';
-    return null;
-  })();
 
-  const inCombat = s.activity?.type === 'combat';
-  const combatMonster = inCombat ? MONSTER_MAP[(s.activity as { monsterId: string }).monsterId] : null;
+    const onMouseMove = (e: MouseEvent) => {
+      if (dragging) {
+        cam.yaw -= (e.clientX - dragLast.x) * 0.008;
+        cam.pitch = Math.min(1.3, Math.max(0.45, cam.pitch + (e.clientY - dragLast.y) * 0.005));
+        dragLast = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      lastMouse = { x: e.clientX, y: e.clientY };
+    };
+    const onPointerDown = (e: MouseEvent) => {
+      if (e.button === 1 || e.button === 2) {
+        dragging = true;
+        dragLast = { x: e.clientX, y: e.clientY };
+      }
+    };
+    const onPointerUp = () => (dragging = false);
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      cam.dist = Math.min(24, Math.max(6, cam.dist * (1 + e.deltaY * 0.001)));
+    };
+    const onContext = (e: Event) => e.preventDefault();
+
+    const KEYMAP: Record<string, [number, number]> = {
+      w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+      ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+    };
+    let moveAccum = 0;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (KEYMAP[k] || k === 'q' || k === 'e') {
+        e.preventDefault();
+        if (KEYMAP[k]) stopWalking();
+        keys.add(k);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      keys.delete(k);
+    };
+
+    renderer.domElement.addEventListener('click', onClick);
+    renderer.domElement.addEventListener('mousemove', onMouseMove);
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    renderer.domElement.addEventListener('contextmenu', onContext);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    const resize = () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+
+    // ——— frame loop ———
+
+    let raf = 0;
+    let prev = performance.now();
+    const animate = () => {
+      raf = requestAnimationFrame(animate);
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - prev) / 1000);
+      prev = now;
+      const t = now / 1000;
+      const st = stateRef.current;
+
+      // keyboard movement, rotated to face the camera
+      if ([...keys].some((k) => KEYMAP[k])) {
+        moveAccum += dt;
+        if (moveAccum >= 0.15) {
+          moveAccum = 0;
+          const k = [...keys].find((kk) => KEYMAP[kk])!;
+          let [dx, dy] = KEYMAP[k];
+          const quad = ((Math.round(cam.yaw / (Math.PI / 2)) % 4) + 4) % 4;
+          for (let i = 0; i < quad; i++) [dx, dy] = [dy, -dx];
+          dispatch({ type: 'MOVE_STEP', dx, dy });
+        }
+      } else {
+        moveAccum = 0.15;
+      }
+      if (keys.has('q')) cam.yaw += dt * 1.8;
+      if (keys.has('e')) cam.yaw -= dt * 1.8;
+
+      // player
+      const target = tilePos(st.world.px, st.world.py);
+      const before = player.position.clone();
+      player.position.lerp(target, Math.min(1, dt * 9));
+      const vel = player.position.clone().sub(before);
+      if (vel.lengthSq() > 1e-6) player.rotation.y = Math.atan2(vel.x, vel.z);
+
+      // camera follows
+      focus.lerp(target, Math.min(1, dt * 5));
+      const cp = Math.cos(cam.pitch);
+      camera.position.set(
+        focus.x + Math.sin(cam.yaw) * cp * cam.dist,
+        focus.y + Math.sin(cam.pitch) * cam.dist,
+        focus.z + Math.cos(cam.yaw) * cp * cam.dist,
+      );
+      camera.lookAt(focus.x, focus.y + 0.6, focus.z);
+      sun.position.set(focus.x + 18, focus.y + 32, focus.z + 10);
+      sun.target.position.copy(focus);
+
+      // monsters
+      const fightingUid = st.activity?.type === 'combat' ? st.activity.entityUid : undefined;
+      for (const e of st.world.entities) {
+        const sprite = entitySprites.get(e.uid);
+        if (!sprite) continue;
+        const alive = e.respawn === 0;
+        sprite.visible = alive;
+        if (alive) sprite.position.lerp(tilePos(e.x, e.y), Math.min(1, dt * 6));
+      }
+
+      // node depletion swaps
+      world.nodeVisuals.forEach((v, key) => {
+        const depleted = !!st.world.nodeRespawn[key];
+        v.full.visible = !depleted;
+        v.depleted.visible = depleted;
+      });
+
+      // fight hp bar / target ring / boss stand-in
+      const fight = st.activity?.type === 'combat' ? st.activity : null;
+      if (fight && fight.entityUid === undefined) {
+        if (bossFor !== fight.monsterId) {
+          if (bossSprite) scene.remove(bossSprite);
+          const def = MONSTER_MAP[fight.monsterId];
+          bossSprite = makeEmojiSprite(def.icon, 2.2);
+          const lair = BOSS_LAIRS[def.id];
+          if (lair) bossSprite.position.copy(tilePos(lair.x, lair.y));
+          scene.add(bossSprite);
+          bossFor = def.id;
+        }
+      } else if (bossSprite) {
+        scene.remove(bossSprite);
+        bossSprite = null;
+        bossFor = null;
+      }
+      const tpos = fight ? fightTargetPos(st) : null;
+      if (fight && tpos) {
+        const def = MONSTER_MAP[fight.monsterId];
+        hpBar.sprite.visible = true;
+        hpBar.sprite.position.set(tpos.x, tpos.y + (def.boss ? 2.5 : 1.7), tpos.z);
+        hpBar.draw(fight.monsterHp / def.hp);
+        targetRing.visible = true;
+        targetRing.position.set(tpos.x, tpos.y + 0.05, tpos.z);
+      } else {
+        hpBar.sprite.visible = false;
+        targetRing.visible = false;
+      }
+
+      // hit splats from fx events
+      for (const fx of st.fx) {
+        if (fx.id <= lastFxId) continue;
+        lastFxId = fx.id;
+        const base = fx.target === 'player' ? player.position : tpos ?? player.position;
+        const sp = makeSplatSprite(fx.amount);
+        sp.position.set(
+          base.x + (Math.random() - 0.5) * 0.4,
+          base.y + 1.1 + Math.random() * 0.3,
+          base.z + (Math.random() - 0.5) * 0.4,
+        );
+        scene.add(sp);
+        splats.push({ sprite: sp, born: now });
+      }
+      for (let i = splats.length - 1; i >= 0; i--) {
+        const sp = splats[i];
+        const age = (now - sp.born) / 900;
+        if (age >= 1) {
+          scene.remove(sp.sprite);
+          splats.splice(i, 1);
+        } else {
+          sp.sprite.position.y += dt * 0.5;
+          sp.sprite.material.opacity = 1 - age * age;
+        }
+      }
+      for (let i = markers.length - 1; i >= 0; i--) {
+        const mk = markers[i];
+        const age = (now - mk.born) / 500;
+        if (age >= 1) {
+          scene.remove(mk.mesh);
+          markers.splice(i, 1);
+        } else {
+          mk.mesh.scale.setScalar(1 - age * 0.6);
+          (mk.mesh.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - age);
+        }
+      }
+
+      // world animations
+      for (const fn of world.animated) fn(t);
+
+      // hover hint
+      if (lastMouse && !dragging) {
+        const hit = pick(lastMouse.x, lastMouse.y);
+        const label = hit && hit.kind !== 'terrain' ? ((hit.label as string) ?? null) : null;
+        renderer.domElement.style.cursor = label ? 'pointer' : 'default';
+        if (label !== hoverRef.current) {
+          hoverRef.current = label;
+          setHover(label);
+        }
+      }
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      renderer.domElement.removeEventListener('click', onClick);
+      renderer.domElement.removeEventListener('mousemove', onMouseMove);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('contextmenu', onContext);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      stopWalking();
+      renderer.dispose();
+      container.removeChild(renderer.domElement);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div className="world-wrap">
-      <canvas
-        ref={canvasRef}
-        width={VIEW_W * TILE}
-        height={VIEW_H * TILE}
-        className="world-canvas"
-        onClick={onCanvasClick}
-      />
+    <div className="world-wrap" ref={containerRef}>
       <div className="zone-label">{zoneName(s.world.px, s.world.py)}</div>
-      {activityLabel && (
+      {hover && <div className="hover-chip">{hover}</div>}
+      {s.activity && s.activity.type !== 'combat' && (
         <button className="activity-chip" onClick={() => dispatch({ type: 'STOP' })} title="Click to stop">
-          {activityLabel}
+          {activityLabel(s)}
         </button>
       )}
+      <CombatHud />
       {dialog?.kind === 'npc' && (
         <NpcDialog npc={NPCS.find((n) => n.id === dialog.npcId)!} onClose={() => setDialog(null)} />
       )}
       {dialog?.kind === 'station' && (
         <StationDialog station={dialog.station} onClose={() => setDialog(null)} />
       )}
-      {inCombat && combatMonster && (
-        <div className="combat-overlay">
-          <div className="combat-box">
-            <FightView monster={combatMonster} monsterHp={(s.activity as { monsterHp: number }).monsterHp} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-/** Best-guess terrain colour under a resource/station/lair glyph. */
-function terrainUnder(x: number, y: number): string {
-  const around = [tileAt(x - 1, y), tileAt(x + 1, y), tileAt(x, y - 1), tileAt(x, y + 1)];
-  for (const c of around) if (TERRAIN_COLOR[c]) return c;
-  return '.';
+function activityLabel(s: GameState): string {
+  if (s.activity?.type === 'gather') {
+    const a = GATHER_MAP[s.activity.actionId];
+    return `${a.icon} ${a.name}…`;
+  }
+  if (s.activity?.type === 'thieve') return '🎭 Pickpocketing…';
+  if (s.activity?.type === 'craft') return '🔨 Working…';
+  return '';
 }

@@ -296,3 +296,12 @@ export function zoneName(x: number, y: number): string {
   }
   return 'The Wilds';
 }
+
+/** Boss id → lair tile, scanned from the map. */
+export const BOSS_LAIRS: Record<string, { x: number; y: number }> = {};
+for (let y = 0; y < MAP_H; y++) {
+  for (let x = 0; x < MAP_W; x++) {
+    const bossId = LAIR_BY_CHAR[MAP[y][x]];
+    if (bossId) BOSS_LAIRS[bossId] = { x, y };
+  }
+}

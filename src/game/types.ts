@@ -96,6 +96,14 @@ export interface Monster {
 
 export type LogKind = 'info' | 'combat' | 'loot' | 'levelup' | 'danger' | 'quest';
 
+/** Transient combat event used by the renderer to draw hit splats. */
+export interface FxEvent {
+  id: number;
+  target: 'player' | 'monster';
+  /** Damage dealt; null = a miss. */
+  amount: number | null;
+}
+
 export interface LogEntry {
   id: number;
   text: string;
@@ -198,5 +206,6 @@ export interface GameState {
   settings: Settings;
   log: LogEntry[];
   logCounter: number;
+  fx: FxEvent[];
   savedAt?: number;
 }

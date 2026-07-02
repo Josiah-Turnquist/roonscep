@@ -972,3 +972,94 @@ button {
   flex: 1;
   min-height: 140px;
 }
+
+/* ——— 3D world ——— */
+.world-wrap {
+  flex: 1 1 auto;
+  min-height: 320px;
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+.world-canvas3d {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.viewport-col .log-panel {
+  flex: 0 0 auto;
+  height: 165px;
+}
+
+.hover-chip {
+  position: absolute;
+  top: 52px;
+  left: 22px;
+  background: rgba(22, 19, 14, 0.85);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ——— combat HUD (docked, in-world fighting) ——— */
+.combat-hud {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(660px, 94%);
+  background: rgba(32, 27, 19, 0.92);
+  border: 2px solid var(--border-light);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 12;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.5);
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hud-bars {
+  flex-wrap: nowrap;
+}
+
+.hud-bar-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.hud-label {
+  font-size: 12px;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-vs {
+  font-size: 18px;
+}
+
+.hud-stats {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.hud-consumables {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
