@@ -1,110 +1,63 @@
-import { QUESTS } from '../game/quests';
-import { Quest, QuestObjective } from '../game/types';
+import { QUESTS, objectiveProgress, questReadyToTurnIn, questReqsMet } from '../game/quests';
+import { QuestObjective } from '../game/types';
 import { MONSTER_MAP } from '../game/monsters';
 import { ITEMS } from '../game/items';
-import { SKILL_MAP } from '../game/skills';
-import { useDispatch, useGame } from '../state/store';
+import { NPCS } from '../game/world';
+import { useGame } from '../state/store';
 import { combatLevel } from '../game/combat';
 
 function objectiveLabel(o: QuestObjective): string {
   if (o.type === 'kill') return `Slay ${o.count}× ${MONSTER_MAP[o.monsterId]?.name}`;
-  if (o.type === 'item') return `Deliver ${o.qty}× ${ITEMS[o.itemId]?.name}`;
+  if (o.type === 'item') return `Bring ${o.qty}× ${ITEMS[o.itemId]?.name}`;
   const statLabels: Record<string, string> = { bonesBuried: 'Bury bones', pickpockets: 'Pickpocket successfully' };
   return `${statLabels[o.stat] ?? o.stat} ×${o.count}`;
 }
 
 export default function QuestPanel() {
   const s = useGame();
-  const dispatch = useDispatch();
   const cb = combatLevel(s);
   const done = QUESTS.filter((q) => s.quests[q.id]?.status === 'done').length;
-
-  const progressOf = (q: Quest, o: QuestObjective): [number, number] => {
-    const p = s.quests[q.id];
-    if (o.type === 'kill') {
-      const base = p?.killSnapshot[o.monsterId] ?? s.kills[o.monsterId] ?? 0;
-      return [Math.min(o.count, (s.kills[o.monsterId] ?? 0) - base), o.count];
-    }
-    if (o.type === 'item') return [Math.min(o.qty, s.inventory[o.itemId] ?? 0), o.qty];
-    const base = p?.statSnapshot[o.stat] ?? s.stats[o.stat];
-    return [Math.min(o.count, s.stats[o.stat] - base), o.count];
-  };
+  const giverOf = (qid: string) => NPCS.find((n) => n.questIds?.includes(qid));
 
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>📜 Quests</h2>
-        <p className="muted">
-          {done}/{QUESTS.length} complete. Accept a quest first — kill counts start from that moment.
+        <h2>📜 Quest Journal</h2>
+        <p className="muted small">
+          {done}/{QUESTS.length} complete. Quests are given and turned in by folk in the world —
+          look for the gold “!”.
         </p>
       </div>
-      <div className="boss-list">
+      <div className="side-card-list">
         {QUESTS.map((q) => {
-          const p = s.quests[q.id];
-          const status = p?.status;
-          const reqsMet =
-            (!q.reqCombat || cb >= q.reqCombat) &&
-            (!q.reqQuests || q.reqQuests.every((id) => s.quests[id]?.status === 'done'));
-          const complete =
-            status === 'active' &&
-            q.objectives.every((o) => {
-              const [cur, total] = progressOf(q, o);
-              return cur >= total;
-            });
+          const status = s.quests[q.id]?.status;
+          const reqsMet = questReqsMet(s, q, cb);
+          const ready = questReadyToTurnIn(s, q);
+          const obj = objectiveProgress(s, q);
+          const giver = giverOf(q.id);
           return (
-            <div
-              key={q.id}
-              className={`card boss-card ${status === 'done' ? 'defeated' : ''} ${!reqsMet && !status ? 'locked' : ''}`}
-            >
-              <div className="boss-icon">{q.icon}</div>
-              <div className="boss-info">
-                <div className="card-title">
-                  {q.name} {status === 'done' && <span className="kill-badge">✓ Complete</span>}
-                </div>
-                <div className="muted small">{q.flavor}</div>
-                {q.reqCombat || q.reqQuests ? (
-                  <div className="small muted">
-                    Requires: {q.reqCombat ? `combat ${q.reqCombat}` : ''}
-                    {q.reqCombat && q.reqQuests?.length ? ' · ' : ''}
-                    {q.reqQuests?.map((id) => QUESTS.find((x) => x.id === id)?.name).join(', ')}
-                  </div>
-                ) : null}
-                {status !== 'done' && (
-                  <ul className="objective-list">
-                    {q.objectives.map((o, i) => {
-                      const [cur, total] = progressOf(q, o);
-                      const met = status === 'active' && cur >= total;
-                      return (
-                        <li key={i} className={`small ${met ? 'have' : ''}`}>
-                          {met ? '✅' : '▫️'} {objectiveLabel(o)}
-                          {status === 'active' ? ` (${cur}/${total})` : ''}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <div className="small muted">
-                  Rewards: {q.rewards.gold ? `🪙 ${q.rewards.gold.toLocaleString()}` : ''}
-                  {q.rewards.xp?.map((x) => ` · ${x.amount.toLocaleString()} ${SKILL_MAP[x.skill].name} xp`).join('')}
-                  {q.rewards.items?.map((it) => ` · ${it.qty}× ${ITEMS[it.itemId]?.name}`).join('')}
-                </div>
+            <div key={q.id} className={`card ${status === 'done' ? 'defeated' : ''} ${!reqsMet && !status ? 'locked' : ''}`}>
+              <div className="card-title">
+                {q.icon} {q.name} {status === 'done' && <span className="kill-badge">✓</span>}
+                {ready && <span className="kill-badge ready-badge">Ready to turn in!</span>}
               </div>
-              {status === 'done' ? null : status === 'active' ? (
-                <button
-                  className="btn primary"
-                  disabled={!complete}
-                  onClick={() => dispatch({ type: 'COMPLETE_QUEST', id: q.id })}
-                >
-                  🏵️ Turn in
-                </button>
-              ) : (
-                <button
-                  className="btn"
-                  disabled={!reqsMet}
-                  onClick={() => dispatch({ type: 'ACCEPT_QUEST', id: q.id })}
-                >
-                  📜 Accept
-                </button>
+              {status !== 'done' && (
+                <>
+                  <div className="muted small">{q.flavor}</div>
+                  <ul className="objective-list">
+                    {q.objectives.map((o, i) => (
+                      <li key={i} className={`small ${status === 'active' && obj[i][0] >= obj[i][1] ? 'have' : ''}`}>
+                        {status === 'active' && obj[i][0] >= obj[i][1] ? '✅' : '▫️'} {objectiveLabel(o)}
+                        {status === 'active' ? ` (${obj[i][0]}/${obj[i][1]})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  {giver && (
+                    <div className="small hint-line">
+                      📍 {status === 'active' ? 'Return to' : 'Speak to'} {giver.icon} {giver.name}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );

@@ -1,6 +1,6 @@
 import { Recipe, SkillId } from '../game/types';
 import { SKILL_MAP, COMBAT_SKILLS } from '../game/skills';
-import { GATHER_ACTIONS, THIEVE_ACTIONS } from '../game/actions';
+import { GATHER_ACTIONS, GATHER_HINTS, THIEVE_ACTIONS } from '../game/actions';
 import { RECIPES } from '../game/recipes';
 import { ITEMS } from '../game/items';
 import { PRAYERS } from '../game/prayers';
@@ -17,9 +17,9 @@ function ProgressHeader({ skill }: { skill: SkillId }) {
   return (
     <div className="panel-header">
       <h2>
-        {def.icon} {def.name} <span className="muted">— level {level}</span>
+        {def.icon} {def.name} <span className="muted">— {level}</span>
       </h2>
-      <p className="muted">{def.blurb}</p>
+      <p className="muted small">{def.blurb}</p>
       <p className="muted small">
         {Math.floor(xp).toLocaleString()} xp
         {next ? ` · ${(next - Math.floor(xp)).toLocaleString()} to level ${level + 1}` : ' · MAXED 🏆'}
@@ -57,7 +57,7 @@ function PrayerPanel() {
       {bones.length === 0 ? (
         <p className="muted small">No bones in your bag. Monsters drop them generously.</p>
       ) : (
-        <div className="card-grid">
+        <div className="side-card-list">
           {bones.map(([id, qty]) => {
             const it = ITEMS[id];
             return (
@@ -82,9 +82,9 @@ function PrayerPanel() {
         </div>
       )}
       <h3 className="section-title">
-        🙏 Prayers <span className="muted small">({s.prayerPoints}/{maxPrayerPoints(s)} points — drain per combat round)</span>
+        🙏 Prayers <span className="muted small">({s.prayerPoints}/{maxPrayerPoints(s)})</span>
       </h3>
-      <div className="card-grid">
+      <div className="side-card-list">
         {PRAYERS.map((p) => {
           const locked = level < p.level;
           const active = s.activePrayers.includes(p.id);
@@ -114,52 +114,7 @@ function PrayerPanel() {
   );
 }
 
-function ThievingPanel() {
-  const s = useGame();
-  const dispatch = useDispatch();
-  const level = lvl(s, 'thieving');
-
-  return (
-    <div className="card-grid">
-      {THIEVE_ACTIONS.map((t) => {
-        const locked = level < t.level;
-        const active = s.activity?.type === 'thieve' && s.activity.targetId === t.id;
-        return (
-          <div key={t.id} className={`card ${locked ? 'locked' : ''} ${active ? 'active' : ''}`}>
-            <div className="card-title">
-              {t.icon} {t.name}
-            </div>
-            <div className="muted small">
-              Level {t.level} · {t.xp} xp · 🪙 {t.gold[0]}–{t.gold[1]} per pick
-            </div>
-            <div className="muted small">Caught: {t.failDamage[0]}–{t.failDamage[1]} damage + stun</div>
-            {locked ? (
-              <div className="lock-note">🔒 Requires level {t.level}</div>
-            ) : active ? (
-              <button className="btn danger" onClick={() => dispatch({ type: 'STOP' })}>
-                ⏹ Stop
-              </button>
-            ) : (
-              <button className="btn primary" onClick={() => dispatch({ type: 'START_THIEVE', id: t.id })}>
-                🤏 Pickpocket
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-export default function SkillPanel({
-  skill,
-  onGoCombat,
-  onGoSlayer,
-}: {
-  skill: SkillId;
-  onGoCombat: () => void;
-  onGoSlayer: () => void;
-}) {
+export default function SkillPanel({ skill }: { skill: SkillId }) {
   const s = useGame();
   const dispatch = useDispatch();
 
@@ -176,7 +131,21 @@ export default function SkillPanel({
     return (
       <div className="panel">
         <ProgressHeader skill={skill} />
-        <ThievingPanel />
+        <p className="muted small">
+          Find these folk out in the world and click them to pickpocket:
+        </p>
+        <div className="side-card-list">
+          {THIEVE_ACTIONS.map((t) => (
+            <div key={t.id} className={`card ${lvl(s, 'thieving') < t.level ? 'locked' : ''}`}>
+              <div className="card-title">
+                {t.icon} {t.name}
+              </div>
+              <div className="muted small">
+                Level {t.level} · {t.xp} xp · 🪙 {t.gold[0]}–{t.gold[1]}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -185,10 +154,10 @@ export default function SkillPanel({
     return (
       <div className="panel">
         <ProgressHeader skill={skill} />
-        <p>Take kill contracts from slayer masters to earn Slayer xp and points.</p>
-        <button className="btn primary" onClick={onGoSlayer}>
-          💀 Visit the Slayer Masters
-        </button>
+        <p className="muted small">
+          Visit a slayer master in the world for a contract: Mira in Havenbrook square, Dorn at the
+          Darkspine camp, Zyra at the mouth of Emberdeep.
+        </p>
       </div>
     );
   }
@@ -197,16 +166,13 @@ export default function SkillPanel({
     return (
       <div className="panel">
         <ProgressHeader skill={skill} />
-        <p>
+        <p className="muted small">
           {skill === 'ranged'
             ? 'Equip a bow and fight to train Ranged.'
             : skill === 'magic'
               ? 'Equip a staff and fight to train Magic.'
-              : 'Fight monsters and bosses to train this skill. Pick an attack style in combat to direct your xp.'}
+              : 'Click monsters in the world to fight them. Your attack style (set in combat) directs melee xp.'}
         </p>
-        <button className="btn primary" onClick={onGoCombat}>
-          ⚔️ Go to Combat
-        </button>
       </div>
     );
   }
@@ -218,68 +184,68 @@ export default function SkillPanel({
   return (
     <div className="panel">
       <ProgressHeader skill={skill} />
-      <div className="card-grid">
-        {actions.map((a) => {
-          const locked = level < a.level;
-          const active = s.activity?.type === 'gather' && s.activity.actionId === a.id;
-          return (
-            <div key={a.id} className={`card ${locked ? 'locked' : ''} ${active ? 'active' : ''}`}>
-              <div className="card-title">
-                {a.icon} {a.name}
+      {actions.length > 0 && (
+        <>
+          <p className="muted small">Click these in the world to gather:</p>
+          <div className="side-card-list">
+            {actions.map((a) => {
+              const locked = level < a.level;
+              const active = s.activity?.type === 'gather' && s.activity.actionId === a.id;
+              return (
+                <div key={a.id} className={`card ${locked ? 'locked' : ''} ${active ? 'active' : ''}`}>
+                  <div className="card-title">
+                    {a.icon} {a.name}
+                  </div>
+                  <div className="muted small">
+                    Level {a.level} · {a.xp} xp · {ITEMS[a.output]?.icon} {ITEMS[a.output]?.name}
+                  </div>
+                  <div className="small hint-line">📍 {GATHER_HINTS[a.id]}</div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {recipes.length > 0 && (
+        <div className="side-card-list">
+          {recipes.map((r) => {
+            const locked = level < r.level;
+            const active = s.activity?.type === 'craft' && s.activity.recipeId === r.id;
+            const affordable =
+              (r.goldCost ?? 0) <= s.gold &&
+              Object.entries(r.inputs).every(([id, qty]) => (s.inventory[id] ?? 0) >= qty);
+            return (
+              <div key={r.id} className={`card ${locked ? 'locked' : ''} ${active ? 'active' : ''}`}>
+                <div className="card-title">
+                  {r.icon} {r.name}
+                </div>
+                <div className="muted small">
+                  Level {r.level} · {r.xp} xp
+                  {r.burnChance !== undefined ? ' · may burn' : ''}
+                  {r.station ? ` · at a ${r.station}` : ''}
+                </div>
+                <RecipeInputs recipe={r} />
+                {locked ? (
+                  <div className="lock-note">🔒 Requires level {r.level}</div>
+                ) : active ? (
+                  <button className="btn danger" onClick={() => dispatch({ type: 'STOP' })}>
+                    ⏹ Stop
+                  </button>
+                ) : (
+                  <button
+                    className="btn primary"
+                    disabled={!affordable}
+                    onClick={() => dispatch({ type: 'START_CRAFT', id: r.id })}
+                    title={r.station ? `You must be standing at a ${r.station}` : ''}
+                  >
+                    ▶ Make
+                  </button>
+                )}
               </div>
-              <div className="muted small">
-                Level {a.level} · {a.xp} xp · yields {ITEMS[a.output]?.icon} {ITEMS[a.output]?.name}
-              </div>
-              {locked ? (
-                <div className="lock-note">🔒 Requires level {a.level}</div>
-              ) : active ? (
-                <button className="btn danger" onClick={() => dispatch({ type: 'STOP' })}>
-                  ⏹ Stop
-                </button>
-              ) : (
-                <button className="btn primary" onClick={() => dispatch({ type: 'START_GATHER', id: a.id })}>
-                  ▶ Start
-                </button>
-              )}
-            </div>
-          );
-        })}
-        {recipes.map((r) => {
-          const locked = level < r.level;
-          const active = s.activity?.type === 'craft' && s.activity.recipeId === r.id;
-          const affordable =
-            (r.goldCost ?? 0) <= s.gold &&
-            Object.entries(r.inputs).every(([id, qty]) => (s.inventory[id] ?? 0) >= qty);
-          return (
-            <div key={r.id} className={`card ${locked ? 'locked' : ''} ${active ? 'active' : ''}`}>
-              <div className="card-title">
-                {r.icon} {r.name}
-              </div>
-              <div className="muted small">
-                Level {r.level} · {r.xp} xp
-                {r.burnChance !== undefined ? ' · may burn' : ''}
-                {r.outputQty && r.outputQty > 1 ? ` · makes ${r.outputQty}` : ''}
-              </div>
-              <RecipeInputs recipe={r} />
-              {locked ? (
-                <div className="lock-note">🔒 Requires level {r.level}</div>
-              ) : active ? (
-                <button className="btn danger" onClick={() => dispatch({ type: 'STOP' })}>
-                  ⏹ Stop
-                </button>
-              ) : (
-                <button
-                  className="btn primary"
-                  disabled={!affordable}
-                  onClick={() => dispatch({ type: 'START_CRAFT', id: r.id })}
-                >
-                  ▶ Make
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -63,6 +63,8 @@ export interface Recipe {
   goldCost?: number;
   output: string;
   outputQty?: number;
+  /** Must stand near this station in the world to make it. */
+  station?: 'furnace' | 'anvil' | 'range';
   /** Base chance to ruin the attempt (cooking); shrinks as level rises. */
   burnChance?: number;
 }
@@ -101,11 +103,32 @@ export interface LogEntry {
 }
 
 export type Activity =
-  | { type: 'gather'; actionId: string }
+  | { type: 'gather'; actionId: string; nodeKey?: string }
   | { type: 'thieve'; targetId: string }
   | { type: 'craft'; recipeId: string }
-  | { type: 'combat'; monsterId: string; monsterHp: number }
+  | { type: 'combat'; monsterId: string; monsterHp: number; entityUid?: number }
   | null;
+
+export interface MonsterEntity {
+  uid: number;
+  defId: string;
+  x: number;
+  y: number;
+  homeX: number;
+  homeY: number;
+  /** Ticks until this entity returns; 0 = alive. */
+  respawn: number;
+}
+
+export interface WorldState {
+  px: number;
+  py: number;
+  /** Successful gathers taken from a node since it last respawned. */
+  nodeUses: Record<string, number>;
+  /** Ticks until a depleted node returns. */
+  nodeRespawn: Record<string, number>;
+  entities: MonsterEntity[];
+}
 
 export interface SlayerTask {
   monsterId: string;
@@ -153,6 +176,7 @@ export interface Settings {
 }
 
 export interface GameState {
+  world: WorldState;
   xp: Record<SkillId, number>;
   currentHp: number;
   prayerPoints: number;

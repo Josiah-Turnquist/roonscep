@@ -4,33 +4,28 @@ import { useGame } from '../state/store';
 import { combatLevel, maxHp, maxPrayerPoints } from '../game/combat';
 import { levelForXp } from '../game/xp';
 import { MONSTER_MAP } from '../game/monsters';
+import WorldView from './WorldView';
 import Sidebar from './Sidebar';
 import SkillPanel from './SkillPanel';
-import CombatPanel from './CombatPanel';
-import SlayerPanel from './SlayerPanel';
-import BossPanel from './BossPanel';
 import QuestPanel from './QuestPanel';
+import SlayerPanel from './SlayerPanel';
 import InventoryPanel from './InventoryPanel';
-import ShopPanel from './ShopPanel';
 import CharacterPanel from './CharacterPanel';
 import LogPanel from './LogPanel';
 
-export type Tab = 'skills' | 'combat' | 'slayer' | 'bosses' | 'quests' | 'inventory' | 'shop' | 'character';
+type SideTab = 'skills' | 'inventory' | 'quests' | 'slayer' | 'character';
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'skills', label: '🛠️ Skills' },
-  { id: 'combat', label: '⚔️ Combat' },
-  { id: 'slayer', label: '💀 Slayer' },
-  { id: 'bosses', label: '👹 Bosses' },
-  { id: 'quests', label: '📜 Quests' },
-  { id: 'inventory', label: '🎒 Inventory' },
-  { id: 'shop', label: '🛒 Shop' },
-  { id: 'character', label: '🧙 Character' },
+const SIDE_TABS: { id: SideTab; icon: string; label: string }[] = [
+  { id: 'skills', icon: '🛠️', label: 'Skills' },
+  { id: 'inventory', icon: '🎒', label: 'Bag' },
+  { id: 'quests', icon: '📜', label: 'Quests' },
+  { id: 'slayer', icon: '💀', label: 'Slayer' },
+  { id: 'character', icon: '🧙', label: 'You' },
 ];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('skills');
-  const [selectedSkill, setSelectedSkill] = useState<SkillId>('woodcutting');
+  const [tab, setTab] = useState<SideTab>('skills');
+  const [selectedSkill, setSelectedSkill] = useState<SkillId | null>(null);
   const s = useGame();
 
   const totalLevel = Object.values(s.xp).reduce((sum, xp) => sum + levelForXp(xp), 0);
@@ -41,17 +36,6 @@ export default function App() {
     <div className="app">
       <header className="header">
         <h1 className="brand">⚔️ Skillbound</h1>
-        <nav className="tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
         <div className="header-stats">
           {task && (
             <button className="task-chip" title="Current slayer task" onClick={() => setTab('slayer')}>
@@ -69,31 +53,45 @@ export default function App() {
           <span title="Gold">🪙 {s.gold.toLocaleString()}</span>
         </div>
       </header>
-      <div className="layout">
-        <Sidebar
-          selectedSkill={selectedSkill}
-          onSelect={(id) => {
-            setSelectedSkill(id);
-            setTab('skills');
-          }}
-        />
-        <main className="main">
-          {tab === 'skills' && (
-            <SkillPanel
-              skill={selectedSkill}
-              onGoCombat={() => setTab('combat')}
-              onGoSlayer={() => setTab('slayer')}
-            />
-          )}
-          {tab === 'combat' && <CombatPanel />}
-          {tab === 'slayer' && <SlayerPanel />}
-          {tab === 'bosses' && <BossPanel />}
-          {tab === 'quests' && <QuestPanel />}
-          {tab === 'inventory' && <InventoryPanel />}
-          {tab === 'shop' && <ShopPanel />}
-          {tab === 'character' && <CharacterPanel />}
-        </main>
-        <LogPanel />
+      <div className="game-layout">
+        <div className="viewport-col">
+          <WorldView />
+          <LogPanel />
+        </div>
+        <aside className="side-panel">
+          <nav className="side-tabs">
+            {SIDE_TABS.map((t) => (
+              <button
+                key={t.id}
+                className={`side-tab ${tab === t.id ? 'active' : ''}`}
+                title={t.label}
+                onClick={() => {
+                  setTab(t.id);
+                  if (t.id === 'skills') setSelectedSkill(null);
+                }}
+              >
+                {t.icon}
+              </button>
+            ))}
+          </nav>
+          <div className="side-content">
+            {tab === 'skills' &&
+              (selectedSkill ? (
+                <>
+                  <button className="btn small back-btn" onClick={() => setSelectedSkill(null)}>
+                    ← All skills
+                  </button>
+                  <SkillPanel skill={selectedSkill} />
+                </>
+              ) : (
+                <Sidebar selectedSkill={null} onSelect={setSelectedSkill} />
+              ))}
+            {tab === 'inventory' && <InventoryPanel />}
+            {tab === 'quests' && <QuestPanel />}
+            {tab === 'slayer' && <SlayerPanel />}
+            {tab === 'character' && <CharacterPanel />}
+          </div>
+        </aside>
       </div>
     </div>
   );

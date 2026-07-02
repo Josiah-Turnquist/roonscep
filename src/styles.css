@@ -724,3 +724,251 @@ button {
   border-left-color: var(--purple);
   color: var(--purple);
 }
+
+/* ——— world & RS layout ——— */
+.game-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
+.viewport-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.world-wrap {
+  position: relative;
+  background: #0d0b08;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+}
+
+.world-canvas {
+  border: 3px solid var(--border-light);
+  border-radius: 6px;
+  image-rendering: pixelated;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.zone-label {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  background: rgba(22, 19, 14, 0.8);
+  border: 1px solid var(--border-light);
+  color: var(--gold);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.activity-chip {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  background: rgba(22, 19, 14, 0.85);
+  border: 1px solid var(--green);
+  color: var(--green);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  animation: pulse 1.2s infinite alternate;
+}
+
+.side-panel {
+  width: 400px;
+  background: var(--bg-panel);
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.side-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+}
+
+.side-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 20px;
+  padding: 9px 0;
+}
+
+.side-tab:hover {
+  background: var(--bg-card);
+}
+
+.side-tab.active {
+  background: var(--bg-card);
+  color: var(--gold);
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+.side-content {
+  overflow-y: auto;
+  padding: 12px;
+  flex: 1;
+}
+
+.side-content .sidebar {
+  border-right: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.side-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-content .card-grid,
+.side-content .inv-grid {
+  grid-template-columns: 1fr;
+}
+
+.back-btn {
+  margin-bottom: 10px;
+}
+
+.hint-line {
+  color: var(--blue);
+}
+
+.ready-badge {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* chat log along the bottom of the viewport */
+.viewport-col .log-panel {
+  border-left: none;
+  border-top: 2px solid var(--border);
+  height: 170px;
+  flex-shrink: 0;
+}
+
+/* dialogs */
+.dialog-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.dialog {
+  background: var(--bg-panel);
+  border: 2px solid var(--border-light);
+  border-radius: 10px;
+  width: min(560px, 92%);
+  max-height: 88%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dialog-title {
+  color: var(--gold);
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.dialog-body {
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.dialog-body .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.dialog-flavor {
+  font-style: italic;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.dialog-section {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quest-block {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.dialog-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.combat-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+}
+
+.combat-box {
+  background: var(--bg-panel);
+  border: 2px solid var(--border-light);
+  border-radius: 12px;
+  padding: 18px;
+  width: min(720px, 94%);
+  max-height: 92%;
+  overflow-y: auto;
+}
+
+.world-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+/* the chat log is a bottom bar now — never hide it */
+.viewport-col .log-panel {
+  display: flex !important;
+}
+
+.world-wrap {
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+
+.viewport-col .log-panel {
+  height: auto;
+  flex: 1;
+  min-height: 140px;
+}

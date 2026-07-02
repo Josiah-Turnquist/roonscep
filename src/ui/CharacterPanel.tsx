@@ -126,6 +126,14 @@ export default function CharacterPanel() {
             📥 Import save
           </button>
         </div>
+        <button
+          className="btn danger"
+          onClick={() => {
+            if (window.confirm('Erase all progress and start over?')) dispatch({ type: 'RESET' });
+          }}
+        >
+          🗑️ New Game
+        </button>
       </div>
     </div>
   );

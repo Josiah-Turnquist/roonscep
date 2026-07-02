@@ -46,3 +46,34 @@ export const THIEVE_ACTIONS: ThieveAction[] = [
 ];
 
 export const THIEVE_MAP = Object.fromEntries(THIEVE_ACTIONS.map((a) => [a.id, a]));
+
+/** Where in the world each gathering spot is found (shown in the skill guide). */
+export const GATHER_HINTS: Record<string, string> = {
+  tree: 'Westwood, west of Havenbrook',
+  oak: 'Westwood',
+  willow: 'Willowmere Lake shore',
+  maple: 'the North Pass',
+  yew: 'deep Westwood & the Frozen Reach',
+  magic_tree: 'the Elder Grove',
+  copper: 'Copperhill, east of town',
+  tin: 'Copperhill, east of town',
+  iron: 'Darkspine foothills',
+  coal_rock: 'Darkspine foothills',
+  mithril_rock: 'the Darkspine depths',
+  adamantite_rock: 'the Darkspine depths',
+  runite_rock: 'the Darkspine heart',
+  shrimp_spot: 'Willowmere Lake',
+  trout_spot: 'Willowmere Lake',
+  salmon_spot: 'Willowmere Lake',
+  lobster_spot: 'the Willowmere dock',
+  swordfish_spot: 'the Frozen Reach bay',
+  shark_spot: 'the Frozen Reach bay',
+  berry_bush: 'the fields south of Havenbrook',
+  flax_field: 'the fields south of Havenbrook',
+  sunleaf_patch: 'the Westwood edge',
+  mossbloom_patch: 'Duskmire Swamp',
+  dragonwort_patch: 'Duskmire Swamp',
+  duskthorn_patch: 'deep Duskmire Swamp',
+  golden_orchard: 'the Elder Grove',
+  voidcap_hollow: 'the Void Rift',
+};

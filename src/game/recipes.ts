@@ -34,6 +34,7 @@ for (const m of METALS) {
   recipes.push({
     id: `smelt_${m.id}`, name: `Smelt ${m.name} Bar`, icon: '🧱', skill: 'smithing',
     level: m.smithLevel, xp: m.barXp, inputs: { ...m.ores }, output: `${m.id}_bar`,
+    station: 'furnace',
   });
   const pieces = [
     { piece: 'sword', label: 'Sword', icon: '🗡️', bars: 1, extraLevel: 0 },
@@ -45,7 +46,7 @@ for (const m of METALS) {
     recipes.push({
       id: `forge_${m.id}_${p.piece}`, name: `${m.name} ${p.label}`, icon: p.icon, skill: 'smithing',
       level: Math.min(99, m.smithLevel + p.extraLevel), xp: m.smithXp * p.bars,
-      inputs: { [`${m.id}_bar`]: p.bars }, output: `${m.id}_${p.piece}`,
+      inputs: { [`${m.id}_bar`]: p.bars }, output: `${m.id}_${p.piece}`, station: 'anvil',
     });
   }
 }
@@ -55,6 +56,7 @@ for (const f of FISH) {
   recipes.push({
     id: `cook_${f.cooked}`, name: `Cook ${f.name}`, icon: '🍳', skill: 'cooking',
     level: f.cookLevel, xp: f.cookXp, inputs: { [f.raw]: 1 }, output: f.cooked, burnChance: f.burn,
+    station: 'range',
   });
 }
 

@@ -1,6 +1,6 @@
 import { SkillId } from '../game/types';
 import { SKILLS, SkillCategory } from '../game/skills';
-import { useDispatch, useGame } from '../state/store';
+import { useGame } from '../state/store';
 import { levelForXp, levelProgress, MAX_LEVEL } from '../game/xp';
 
 const CATEGORIES: SkillCategory[] = ['Combat', 'Gathering', 'Artisan'];
@@ -9,14 +9,13 @@ export default function Sidebar({
   selectedSkill,
   onSelect,
 }: {
-  selectedSkill: SkillId;
+  selectedSkill: SkillId | null;
   onSelect: (id: SkillId) => void;
 }) {
   const s = useGame();
-  const dispatch = useDispatch();
 
   return (
-    <aside className="sidebar">
+    <div className="sidebar">
       {CATEGORIES.map((cat) => (
         <div key={cat} className="skill-group">
           <h3 className="skill-group-title">{cat}</h3>
@@ -40,14 +39,6 @@ export default function Sidebar({
           })}
         </div>
       ))}
-      <button
-        className="btn danger small reset-btn"
-        onClick={() => {
-          if (window.confirm('Erase all progress and start over?')) dispatch({ type: 'RESET' });
-        }}
-      >
-        🗑️ New Game
-      </button>
-    </aside>
+    </div>
   );
 }

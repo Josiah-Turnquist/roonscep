@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import {
-  AttackStyle, EquipSlot, GameState, LogKind, Monster, Settings, SkillId, StatKey,
+  AttackStyle, EquipSlot, GameState, LogKind, Monster, Settings, SkillId, StatKey, WorldState,
 } from '../game/types';
 import { ITEMS } from '../game/items';
 import { GATHER_MAP, THIEVE_MAP } from '../game/actions';
@@ -17,19 +17,25 @@ import { PRAYER_MAP } from '../game/prayers';
 import { SLAYER_MASTER_MAP, SLAYER_REWARDS } from '../game/slayer';
 import { QUEST_MAP } from '../game/quests';
 import { ACHIEVEMENTS } from '../game/achievements';
+import {
+  HOME, RESOURCE_BY_CHAR, SPAWNS, STATIONS, isWalkable, tileAt,
+} from '../game/world';
 
 export const TICK_MS = 1200;
 export const SAVE_KEY = 'skillbound-save-v1';
 const LOG_LIMIT = 80;
 const MAX_OFFLINE_TICKS = 18000; // 6 hours
+const ENTITY_RESPAWN_TICKS = 25;
 
 export type Action =
   | { type: 'TICK' }
-  | { type: 'START_GATHER'; id: string }
+  | { type: 'MOVE_STEP'; dx: number; dy: number }
+  | { type: 'START_GATHER_NODE'; x: number; y: number }
   | { type: 'START_THIEVE'; id: string }
   | { type: 'START_CRAFT'; id: string }
   | { type: 'STOP' }
   | { type: 'START_COMBAT'; id: string }
+  | { type: 'START_COMBAT_ENTITY'; uid: number }
   | { type: 'ATTACK' }
   | { type: 'FLEE' }
   | { type: 'TOGGLE_AUTO' }
@@ -58,12 +64,25 @@ const ZERO_STATS: Record<StatKey, number> = {
   tasksCompleted: 0, questsCompleted: 0,
 };
 
+function freshWorld(): WorldState {
+  return {
+    px: HOME.x,
+    py: HOME.y,
+    nodeUses: {},
+    nodeRespawn: {},
+    entities: SPAWNS.map((sp, i) => ({
+      uid: i, defId: sp.defId, x: sp.x, y: sp.y, homeX: sp.x, homeY: sp.y, respawn: 0,
+    })),
+  };
+}
+
 function initialState(): GameState {
   const xp = Object.fromEntries(
     Object.keys(SKILL_MAP).map((id) => [id, 0]),
   ) as Record<SkillId, number>;
   xp.hitpoints = xpForLevel(10);
   return {
+    world: freshWorld(),
     xp,
     currentHp: 10,
     prayerPoints: 1,
@@ -83,7 +102,7 @@ function initialState(): GameState {
     achievements: [],
     stats: { ...ZERO_STATS },
     settings: { autoEat: true, autoEatThreshold: 0.4 },
-    log: [{ id: 0, text: 'Welcome to Skillbound. Pick a skill and start your grind!', kind: 'info' }],
+    log: [{ id: 0, text: 'Welcome to Skillbound! Walk with WASD/arrows or click. Click trees, rocks and monsters to act on them.', kind: 'info' }],
     logCounter: 1,
   };
 }
@@ -136,6 +155,10 @@ function randInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function cheb(ax: number, ay: number, bx: number, by: number): number {
+  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+}
+
 function die(s: GameState, causeName: string) {
   const lost = Math.floor(s.gold * 0.1);
   s.gold -= lost;
@@ -147,7 +170,9 @@ function die(s: GameState, causeName: string) {
   s.activePrayers = [];
   s.boosts = { attack: 0, strength: 0, defence: 0, ranged: 0, magic: 0 };
   s.stats.deaths += 1;
-  pushLog(s, `💀 You were slain by ${causeName}! You lost ${lost.toLocaleString()} gold and awaken at home.`, 'danger');
+  s.world.px = HOME.x;
+  s.world.py = HOME.y;
+  pushLog(s, `💀 You were slain by ${causeName}! You lost ${lost.toLocaleString()} gold and awaken in Havenbrook.`, 'danger');
 }
 
 function bestFoodId(s: GameState): string | null {
@@ -257,17 +282,35 @@ function playerAttacks(s: GameState, m: Monster): boolean {
     grantXp(s, 'hitpoints', Math.floor(dmg * 1.33));
   }
   if (s.activity.monsterHp <= 0) {
+    const slainUid = s.activity.entityUid;
     s.kills[m.id] = (s.kills[m.id] ?? 0) + 1;
     s.stats.totalKills += 1;
     pushLog(s, `🏆 You defeated ${m.name}!`, 'combat');
     rollDrops(s, m);
     creditSlayerKill(s, m);
-    if (m.boss) {
-      s.activity = null;
-      s.autoCombat = false;
+    if (slainUid !== undefined) {
+      const ent = s.world.entities.find((e) => e.uid === slainUid);
+      if (ent) ent.respawn = ENTITY_RESPAWN_TICKS;
+    }
+    // Auto-combat re-engages the nearest surviving monster of the same kind nearby
+    let next: number | undefined;
+    if (!m.boss && s.autoCombat) {
+      let best = 99;
+      for (const e of s.world.entities) {
+        if (e.defId !== m.id || e.respawn > 0 || e.uid === slainUid) continue;
+        const d = cheb(e.x, e.y, s.world.px, s.world.py);
+        if (d <= 5 && d < best) {
+          best = d;
+          next = e.uid;
+        }
+      }
+    }
+    if (next !== undefined) {
+      s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp, entityUid: next };
+      pushLog(s, `You turn to face another ${m.name}.`, 'combat');
     } else {
-      s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp };
-      pushLog(s, `Another ${m.name} appears.`, 'combat');
+      s.activity = null;
+      if (m.boss) s.autoCombat = false;
     }
     return true;
   }
@@ -287,8 +330,12 @@ function combatRound(s: GameState) {
   if (s.activity?.type !== 'combat') return;
   const m = MONSTER_MAP[s.activity.monsterId];
   drainPrayers(s);
-  const died = playerAttacks(s, m);
-  if (!died && s.activity?.type === 'combat') monsterAttacks(s, m);
+  const ended = playerAttacks(s, m);
+  if (!ended && s.activity?.type === 'combat') monsterAttacks(s, m);
+}
+
+function nearStation(s: GameState, type: 'furnace' | 'anvil' | 'range'): boolean {
+  return STATIONS.some((st) => st.type === type && cheb(st.x, st.y, s.world.px, s.world.py) <= 2);
 }
 
 function canAffordRecipe(s: GameState, recipeId: string): boolean {
@@ -351,6 +398,40 @@ function doThieveTick(s: GameState, targetId: string) {
   }
 }
 
+/** Monster wandering, node respawns, entity respawns. */
+function worldTick(s: GameState) {
+  for (const key of Object.keys(s.world.nodeRespawn)) {
+    s.world.nodeRespawn[key] -= 1;
+    if (s.world.nodeRespawn[key] <= 0) delete s.world.nodeRespawn[key];
+  }
+  const fightingUid = s.activity?.type === 'combat' ? s.activity.entityUid : undefined;
+  for (const e of s.world.entities) {
+    if (e.respawn > 0) {
+      e.respawn -= 1;
+      if (e.respawn === 0) {
+        e.x = e.homeX;
+        e.y = e.homeY;
+      }
+      continue;
+    }
+    if (e.uid === fightingUid) continue;
+    if (Math.random() > 0.35) continue;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+    const nx = e.x + dx;
+    const ny = e.y + dy;
+    if (
+      cheb(nx, ny, e.homeX, e.homeY) <= 4 &&
+      isWalkable(nx, ny) &&
+      !(nx === s.world.px && ny === s.world.py) &&
+      !s.world.entities.some((o) => o.uid !== e.uid && o.respawn === 0 && o.x === nx && o.y === ny)
+    ) {
+      e.x = nx;
+      e.y = ny;
+    }
+  }
+}
+
 function questObjectivesMet(s: GameState, questId: string): boolean {
   const q = QUEST_MAP[questId];
   const p = s.quests[questId];
@@ -377,6 +458,7 @@ function withAchievements(s: GameState): GameState {
 function simulateOffline(s: GameState, ticks: number) {
   const before = { ...s.xp };
   const summary: string[] = [];
+  const OFFLINE_RATE = 0.6; // nodes deplete and respawn while you are away
   if (s.activity?.type === 'combat') {
     s.activity = null;
     s.autoCombat = false;
@@ -388,7 +470,7 @@ function simulateOffline(s: GameState, ticks: number) {
       let gained = 0;
       while (remaining > 0) {
         const chunk = Math.min(remaining, 200);
-        const succ = Math.round(chunk * gatherChance(lvl(s, a.skill), a.level));
+        const succ = Math.round(chunk * gatherChance(lvl(s, a.skill), a.level) * OFFLINE_RATE);
         addItem(s, a.output, succ);
         grantXp(s, a.skill, succ * a.xp);
         gained += succ;
@@ -406,7 +488,7 @@ function simulateOffline(s: GameState, ticks: number) {
       const avgGold = (t.gold[0] + t.gold[1]) / 2;
       while (remaining > 0) {
         const chunk = Math.min(remaining, 200);
-        const succ = Math.round(chunk * thieveChance(lvl(s, 'thieving'), t.level));
+        const succ = Math.round(chunk * thieveChance(lvl(s, 'thieving'), t.level) * OFFLINE_RATE);
         grantXp(s, 'thieving', succ * t.xp);
         gold += Math.round(succ * avgGold);
         succTotal += succ;
@@ -443,6 +525,9 @@ function simulateOffline(s: GameState, ticks: number) {
   }
   s.currentHp = maxHp(s);
   s.prayerPoints = maxPrayerPoints(s);
+  s.world.nodeRespawn = {};
+  s.world.nodeUses = {};
+  for (const e of s.world.entities) e.respawn = 0;
   const xpGained = Object.keys(s.xp).reduce((sum, k) => sum + (s.xp[k as SkillId] - before[k as SkillId]), 0);
   const hours = ((ticks * TICK_MS) / 3600000).toFixed(1);
   pushLog(
@@ -458,9 +543,12 @@ export function loadState(): GameState {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return base;
     const saved = JSON.parse(raw) as Partial<GameState>;
+    const savedWorld =
+      saved.world && saved.world.entities?.length === SPAWNS.length ? saved.world : base.world;
     const s: GameState = {
       ...base,
       ...saved,
+      world: savedWorld,
       xp: { ...base.xp, ...(saved.xp ?? {}) },
       boosts: { ...base.boosts, ...(saved.boosts ?? {}) },
       stats: { ...base.stats, ...(saved.stats ?? {}) },
@@ -468,6 +556,16 @@ export function loadState(): GameState {
       quests: saved.quests ?? {},
       achievements: saved.achievements ?? [],
     };
+    // Pre-world saves: activities and fights referenced nothing in the world
+    if (s.activity?.type === 'gather' && !s.activity.nodeKey) s.activity = null;
+    if (s.activity?.type === 'combat' && s.activity.entityUid === undefined) {
+      const m = MONSTER_MAP[s.activity.monsterId];
+      if (!m?.boss) s.activity = null;
+    }
+    if (!isWalkable(s.world.px, s.world.py)) {
+      s.world.px = HOME.x;
+      s.world.py = HOME.y;
+    }
     if (saved.savedAt) {
       const ticks = Math.min(Math.floor((Date.now() - saved.savedAt) / TICK_MS), MAX_OFFLINE_TICKS);
       if (ticks > 10 && s.activity) simulateOffline(s, ticks);
@@ -485,12 +583,16 @@ function reduceInner(state: GameState, action: Action): GameState {
 
   switch (action.type) {
     case 'TICK': {
+      worldTick(s);
       if (s.stunnedTicks > 0) {
         s.stunnedTicks -= 1;
         return s;
       }
       if (s.activity?.type === 'gather') {
         const a = GATHER_MAP[s.activity.actionId];
+        const nodeKey = s.activity.nodeKey!;
+        const [nx, ny] = nodeKey.split(',').map(Number);
+        const cfg = RESOURCE_BY_CHAR[tileAt(nx, ny)];
         if (Math.random() < gatherChance(lvl(s, a.skill), a.level)) {
           addItem(s, a.output, 1);
           s.stats.itemsGathered += 1;
@@ -501,6 +603,15 @@ function reduceInner(state: GameState, action: Action): GameState {
             ];
             addItem(s, gem, 1);
             pushLog(s, `✨ You unearth a ${ITEMS[gem].name}!`, 'loot');
+          }
+          if (cfg && cfg.uses > 0) {
+            s.world.nodeUses[nodeKey] = (s.world.nodeUses[nodeKey] ?? 0) + 1;
+            if (s.world.nodeUses[nodeKey] >= cfg.uses) {
+              delete s.world.nodeUses[nodeKey];
+              s.world.nodeRespawn[nodeKey] = cfg.respawn;
+              s.activity = null;
+              pushLog(s, cfg.depleteMsg);
+            }
           }
         }
       } else if (s.activity?.type === 'thieve') {
@@ -518,25 +629,52 @@ function reduceInner(state: GameState, action: Action): GameState {
       return s;
     }
 
-    case 'START_GATHER': {
-      const a = GATHER_MAP[action.id];
-      if (lvl(s, a.skill) < a.level) return state;
-      s.activity = { type: 'gather', actionId: action.id };
+    case 'MOVE_STEP': {
+      if (s.activity?.type === 'combat') return state;
+      if (s.stunnedTicks > 0) return state;
+      const nx = s.world.px + action.dx;
+      const ny = s.world.py + action.dy;
+      if (!isWalkable(nx, ny)) return state;
+      s.world.px = nx;
+      s.world.py = ny;
+      if (s.activity) s.activity = null; // moving interrupts work
+      return s;
+    }
+
+    case 'START_GATHER_NODE': {
+      const key = `${action.x},${action.y}`;
+      const cfg = RESOURCE_BY_CHAR[tileAt(action.x, action.y)];
+      if (!cfg) return state;
+      if (cheb(action.x, action.y, s.world.px, s.world.py) > 1) return state;
+      if (s.world.nodeRespawn[key]) return state;
+      const a = GATHER_MAP[cfg.actionId];
+      if (lvl(s, a.skill) < a.level) {
+        pushLog(s, `You need ${SKILL_MAP[a.skill].name} level ${a.level} for the ${a.name.toLowerCase()}.`, 'danger');
+        return s;
+      }
+      s.activity = { type: 'gather', actionId: a.id, nodeKey: key };
       pushLog(s, `You begin working the ${a.name.toLowerCase()} (${SKILL_MAP[a.skill].name}).`);
       return s;
     }
 
     case 'START_THIEVE': {
       const t = THIEVE_MAP[action.id];
-      if (lvl(s, 'thieving') < t.level) return state;
+      if (lvl(s, 'thieving') < t.level) {
+        pushLog(s, `You need Thieving level ${t.level} to pickpocket the ${t.name.toLowerCase()}.`, 'danger');
+        return s;
+      }
       s.activity = { type: 'thieve', targetId: action.id };
-      pushLog(s, `You slip into the crowd near the ${t.name.toLowerCase()}…`);
+      pushLog(s, `You edge closer to the ${t.name.toLowerCase()}…`);
       return s;
     }
 
     case 'START_CRAFT': {
       const r = RECIPE_MAP[action.id];
       if (lvl(s, r.skill) < r.level) return state;
+      if (r.station && !nearStation(s, r.station)) {
+        pushLog(s, `You need to stand at a ${r.station} to make ${r.name}. There is one in Havenbrook.`, 'danger');
+        return s;
+      }
       s.activity = { type: 'craft', recipeId: action.id };
       pushLog(s, `You begin making ${r.name}.`);
       return s;
@@ -549,13 +687,30 @@ function reduceInner(state: GameState, action: Action): GameState {
 
     case 'START_COMBAT': {
       const m = MONSTER_MAP[action.id];
-      if (m.boss && combatLevel(s) < (m.levelReq ?? 0)) return state;
+      if (m.boss && combatLevel(s) < (m.levelReq ?? 0)) {
+        pushLog(s, `${m.name} would destroy you — you need combat level ${m.levelReq}.`, 'danger');
+        return s;
+      }
       if (m.slayerReq && lvl(s, 'slayer') < m.slayerReq) {
         pushLog(s, `You need Slayer level ${m.slayerReq} to harm ${m.name}.`, 'danger');
         return s;
       }
       s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp };
       pushLog(s, `${m.icon} You engage ${m.name}${m.boss ? ' — a mighty boss' : ''}!`, 'combat');
+      return s;
+    }
+
+    case 'START_COMBAT_ENTITY': {
+      const ent = s.world.entities.find((e) => e.uid === action.uid);
+      if (!ent || ent.respawn > 0) return state;
+      if (cheb(ent.x, ent.y, s.world.px, s.world.py) > 1) return state;
+      const m = MONSTER_MAP[ent.defId];
+      if (m.slayerReq && lvl(s, 'slayer') < m.slayerReq) {
+        pushLog(s, `You need Slayer level ${m.slayerReq} to harm ${m.name}.`, 'danger');
+        return s;
+      }
+      s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp, entityUid: ent.uid };
+      pushLog(s, `${m.icon} You engage ${m.name}!`, 'combat');
       return s;
     }
 

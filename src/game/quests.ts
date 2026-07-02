@@ -74,3 +74,32 @@ export const QUESTS: Quest[] = [
 ];
 
 export const QUEST_MAP = Object.fromEntries(QUESTS.map((q) => [q.id, q]));
+
+// ——— shared quest progress helpers ———
+import type { GameState } from './types';
+
+export function questReqsMet(s: GameState, q: Quest, combatLvl: number): boolean {
+  return (
+    (!q.reqCombat || combatLvl >= q.reqCombat) &&
+    (!q.reqQuests || q.reqQuests.every((id) => s.quests[id]?.status === 'done'))
+  );
+}
+
+/** Progress toward each objective: [current, total]. Uses accept-time snapshots. */
+export function objectiveProgress(s: GameState, q: Quest): [number, number][] {
+  const p = s.quests[q.id];
+  return q.objectives.map((o) => {
+    if (o.type === 'kill') {
+      const base = p?.killSnapshot[o.monsterId] ?? s.kills[o.monsterId] ?? 0;
+      return [Math.min(o.count, (s.kills[o.monsterId] ?? 0) - base), o.count];
+    }
+    if (o.type === 'item') return [Math.min(o.qty, s.inventory[o.itemId] ?? 0), o.qty];
+    const base = p?.statSnapshot[o.stat] ?? s.stats[o.stat];
+    return [Math.min(o.count, s.stats[o.stat] - base), o.count];
+  });
+}
+
+export function questReadyToTurnIn(s: GameState, q: Quest): boolean {
+  if (s.quests[q.id]?.status !== 'active') return false;
+  return objectiveProgress(s, q).every(([cur, total]) => cur >= total);
+}
