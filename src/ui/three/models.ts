@@ -229,72 +229,137 @@ export function buildHumanoid(o: HumanoidOpts): CharModel {
   return { group: g, update };
 }
 
-// ——— quadruped ———
+// ——— animals ———
 
-interface QuadOpts {
-  body: number;
-  head?: number;
-  scale?: number;
-  squat?: number; // 1 = cow-height, smaller = low to the ground
-  tail?: boolean;
-  horns?: number;
-  patches?: number;
-}
-
-function buildQuadruped(o: QuadOpts): CharModel {
-  const g = new THREE.Group();
-  const squat = o.squat ?? 1;
-  const legLen = 0.26 * squat;
-  const bodyY = legLen + 0.14;
-  const body = box(0.6, 0.3, 0.3, o.body);
-  body.position.y = bodyY;
-  g.add(body);
-  if (o.patches !== undefined) {
-    for (const [px, py, pz] of [[-0.15, 0.08, 0.16], [0.18, -0.02, -0.16], [0.05, 0.12, 0.1]] as const) {
-      const patch = box(0.16, 0.14, 0.02, o.patches);
-      patch.position.set(px, py, pz);
-      body.add(patch);
-    }
-  }
-  const head = box(0.2, 0.2, 0.18, o.head ?? o.body);
-  head.position.set(0.36, bodyY + 0.12, 0);
-  g.add(head);
-  if (o.horns !== undefined) {
-    for (const side of [-1, 1]) {
-      const horn = cone(0.03, 0.12, o.horns);
-      horn.position.set(0.34, bodyY + 0.26, side * 0.09);
-      horn.rotation.z = 0.3;
-      g.add(horn);
-    }
-  }
-  const legs: THREE.Mesh[] = [];
-  for (const [lx, lz] of [[-0.22, -0.11], [-0.22, 0.11], [0.22, -0.11], [0.22, 0.11]] as const) {
-    const l = limb(0.07, legLen, o.body);
-    l.position.set(lx, legLen, lz);
-    g.add(l);
-    legs.push(l);
-  }
-  let tail: THREE.Mesh | null = null;
-  if (o.tail) {
-    tail = cyl(0.02, 0.035, 0.4, o.body);
-    tail.position.set(-0.42, bodyY + 0.05, 0);
-    tail.rotation.z = 1.1;
-    g.add(tail);
-  }
-  // built facing +x; wrap so the model faces +z like everything else
+/** Wrap parts built facing +x so the finished model faces +z like everything else. */
+function faceForward(g: THREE.Group, scale: number): THREE.Group {
   const inner = new THREE.Group();
   inner.add(...g.children.slice());
   inner.rotation.y = -Math.PI / 2;
   g.add(inner);
-  g.scale.setScalar(o.scale ?? 1);
+  g.scale.setScalar(scale);
+  return g;
+}
 
+function buildCow(): CharModel {
+  const g = new THREE.Group();
+  const hide = 0xf0ead8;
+  const legLen = 0.34;
+  const bodyY = legLen + 0.2;
+
+  const body = box(0.8, 0.44, 0.42, hide);
+  body.position.y = bodyY;
+  g.add(body);
+  for (const [px, py, pz] of [[-0.2, 0.1, 0.21], [0.22, -0.05, -0.21], [0.02, 0.14, 0.21], [-0.15, -0.08, -0.21]] as const) {
+    const patch = box(0.2, 0.16, 0.02, 0x2b2b2b);
+    patch.position.set(px, py, pz);
+    body.add(patch);
+  }
+  // head hangs forward off the shoulders, with a pale muzzle
+  const head = box(0.24, 0.24, 0.24, hide);
+  head.position.set(0.52, bodyY + 0.1, 0);
+  g.add(head);
+  const muzzle = box(0.12, 0.14, 0.18, 0xe0b8a8);
+  muzzle.position.set(0.66, bodyY + 0.04, 0);
+  g.add(muzzle);
+  for (const side of [-1, 1]) {
+    // floppy ears out to the sides
+    const ear = box(0.06, 0.05, 0.12, hide);
+    ear.position.set(0.5, bodyY + 0.2, side * 0.17);
+    g.add(ear);
+    // horns sweep outward, not up like cat ears
+    const horn = cone(0.03, 0.14, 0xd8d2b8);
+    horn.position.set(0.5, bodyY + 0.26, side * 0.12);
+    horn.rotation.x = side * 1.1;
+    g.add(horn);
+    const eye = sphere(0.025, 0x1a1a1a);
+    eye.position.set(0.62, bodyY + 0.14, side * 0.1);
+    g.add(eye);
+  }
+  const udder = sphere(0.13, 0xe8b8b0);
+  udder.scale.y = 0.65;
+  udder.position.set(-0.12, bodyY - 0.24, 0);
+  g.add(udder);
+  // tail hangs down with a tuft
+  const tail = cyl(0.018, 0.025, 0.36, hide);
+  tail.position.set(-0.42, bodyY - 0.05, 0);
+  tail.rotation.z = 0.18;
+  g.add(tail);
+  const tuft = sphere(0.04, 0x2b2b2b);
+  tuft.position.set(-0.45, bodyY - 0.24, 0);
+  g.add(tuft);
+
+  const legs: THREE.Mesh[] = [];
+  for (const [lx, lz] of [[-0.28, -0.13], [-0.28, 0.13], [0.28, -0.13], [0.28, 0.13]] as const) {
+    const l = limb(0.09, legLen, hide);
+    l.position.set(lx, legLen + 0.02, lz);
+    g.add(l);
+    legs.push(l);
+  }
+
+  faceForward(g, 1);
   const update = (_dt: number, t: number, moving: number) => {
-    const swing = Math.sin(t * 9) * 0.5 * moving;
+    const swing = Math.sin(t * 7) * 0.4 * moving;
     legs[0].rotation.x = swing;
     legs[3].rotation.x = swing;
     legs[1].rotation.x = -swing;
     legs[2].rotation.x = -swing;
-    if (tail) tail.rotation.x = Math.sin(t * 3) * 0.25;
+    tail.rotation.x = Math.sin(t * 2.2) * 0.3;
+  };
+  return { group: g, update };
+}
+
+function buildRat(): CharModel {
+  const g = new THREE.Group();
+  const fur = 0x8a7562;
+  const legLen = 0.1;
+  const bodyY = 0.2;
+
+  // low, long, tapered body
+  const body = sphere(0.22, fur);
+  body.scale.set(1.8, 0.85, 1);
+  body.position.y = bodyY;
+  g.add(body);
+  // pointed snout
+  const snout = cone(0.12, 0.3, fur);
+  snout.rotation.z = -Math.PI / 2;
+  snout.position.set(0.48, bodyY + 0.02, 0);
+  g.add(snout);
+  const nose = sphere(0.025, 0xd89aa0);
+  nose.position.set(0.63, bodyY + 0.02, 0);
+  g.add(nose);
+  for (const side of [-1, 1]) {
+    // big round ears
+    const ear = sphere(0.07, 0xa08a76);
+    ear.scale.z = 0.4;
+    ear.position.set(0.3, bodyY + 0.18, side * 0.1);
+    g.add(ear);
+    const eye = sphere(0.025, 0x1a1a1a);
+    eye.position.set(0.42, bodyY + 0.08, side * 0.07);
+    g.add(eye);
+  }
+  // long thin tail trailing behind, close to the ground
+  const tail = cyl(0.01, 0.022, 0.55, 0xc4a090);
+  tail.position.set(-0.6, bodyY - 0.06, 0);
+  tail.rotation.z = Math.PI / 2 - 0.18;
+  g.add(tail);
+
+  const legs: THREE.Mesh[] = [];
+  for (const [lx, lz] of [[-0.22, -0.12], [-0.22, 0.12], [0.24, -0.12], [0.24, 0.12]] as const) {
+    const l = limb(0.045, legLen + 0.08, 0x6f5c4c);
+    l.position.set(lx, legLen + 0.06, lz);
+    g.add(l);
+    legs.push(l);
+  }
+
+  faceForward(g, 0.85);
+  const update = (_dt: number, t: number, moving: number) => {
+    const scurry = Math.sin(t * 16) * 0.6 * moving;
+    legs[0].rotation.x = scurry;
+    legs[3].rotation.x = scurry;
+    legs[1].rotation.x = -scurry;
+    legs[2].rotation.x = -scurry;
+    tail.rotation.y = Math.sin(t * 4) * 0.3;
   };
   return { group: g, update };
 }
@@ -482,9 +547,9 @@ const SKIN = 0xd9a066;
 export function buildMonsterModel(defId: string): CharModel {
   switch (defId) {
     case 'giant_rat':
-      return buildQuadruped({ body: 0x8a7562, head: 0x9c8770, squat: 0.55, tail: true, scale: 0.8 });
+      return buildRat();
     case 'cow':
-      return buildQuadruped({ body: 0xf0ead8, head: 0xf0ead8, patches: 0x2b2b2b, horns: 0xd8d2b8, tail: true });
+      return buildCow();
     case 'goblin':
       return buildHumanoid({ skin: 0x6a9c3a, tunic: 0x7a5a30, scale: 0.75 });
     case 'skeleton':
