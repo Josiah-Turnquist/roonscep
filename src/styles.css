@@ -576,3 +576,151 @@ button {
     display: none;
   }
 }
+
+/* ——— beta update additions ——— */
+.section-title {
+  color: var(--gold);
+  font-size: 16px;
+  margin: 22px 0 10px;
+}
+
+.prayer-pill {
+  color: var(--blue);
+}
+
+.task-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.task-chip:hover {
+  background: var(--bg-card-hover);
+}
+
+.task-banner {
+  margin-bottom: 8px;
+  max-width: 560px;
+}
+
+.task-bar {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.style-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.card.on-task {
+  border-color: var(--purple);
+}
+
+.objective-list {
+  list-style: none;
+  margin: 4px 0;
+}
+
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.ach {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0.5;
+}
+
+.ach.earned {
+  opacity: 1;
+  border-color: var(--gold);
+}
+
+.ach-icon {
+  font-size: 20px;
+}
+
+.ach-name {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ach-desc {
+  font-size: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 14px;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings select {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-family: inherit;
+}
+
+.save-tools {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.save-tools textarea {
+  flex: 1;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: monospace;
+  font-size: 11px;
+  resize: vertical;
+}
+
+.log-entry.quest {
+  border-left-color: var(--purple);
+  color: var(--purple);
+}

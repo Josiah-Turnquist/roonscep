@@ -34,6 +34,15 @@ export const MONSTERS: Monster[] = [
     flavor: 'Rattles menacingly. Held together by spite.',
   },
   {
+    id: 'zombie', name: 'Zombie', icon: '🧟', hp: 30, attack: 20, defence: 16, maxHit: 5,
+    gold: [10, 35],
+    drops: [
+      { itemId: 'bones', min: 1, max: 2, chance: 1 },
+      { itemId: 'iron_platebody', min: 1, max: 1, chance: 0.03 },
+    ],
+    flavor: 'Shambles with purpose. The purpose is you.',
+  },
+  {
     id: 'guard', name: 'Renegade Guard', icon: '💂', hp: 28, attack: 18, defence: 15, maxHit: 4,
     gold: [15, 40],
     drops: [
@@ -52,6 +61,16 @@ export const MONSTERS: Monster[] = [
       { itemId: 'sapphire', min: 1, max: 1, chance: 0.05 },
     ],
     flavor: 'Slow, enormous, and very territorial.',
+  },
+  {
+    id: 'crawling_horror', name: 'Crawling Horror', icon: '🕷️', hp: 35, attack: 22, defence: 18, maxHit: 5,
+    slayerReq: 15, gold: [20, 55],
+    drops: [
+      { itemId: 'sunleaf', min: 1, max: 3, chance: 0.5 },
+      { itemId: 'emerald', min: 1, max: 1, chance: 0.06 },
+      { itemId: 'mystic_hat', min: 1, max: 1, chance: 0.02 },
+    ],
+    flavor: 'Too many legs, too many eyes. Requires Slayer 15.',
   },
   {
     id: 'moss_giant', name: 'Moss Giant', icon: '🌳', hp: 60, attack: 33, defence: 28, maxHit: 8,
@@ -74,14 +93,45 @@ export const MONSTERS: Monster[] = [
     flavor: 'Sworn to a dark order. Hits like it, too.',
   },
   {
+    id: 'ice_troll', name: 'Ice Troll', icon: '🧌', hp: 70, attack: 38, defence: 33, maxHit: 9,
+    gold: [40, 110],
+    drops: [
+      { itemId: 'big_bones', min: 1, max: 1, chance: 1 },
+      { itemId: 'raw_shark', min: 1, max: 2, chance: 0.2 },
+      { itemId: 'sapphire', min: 1, max: 2, chance: 0.08 },
+    ],
+    flavor: 'Cold hands, colder temper.',
+  },
+  {
+    id: 'dust_wraith', name: 'Dust Wraith', icon: '🌪️', hp: 75, attack: 48, defence: 40, maxHit: 11,
+    slayerReq: 40, gold: [60, 160],
+    drops: [
+      { itemId: 'adamantite_ore', min: 1, max: 2, chance: 0.3 },
+      { itemId: 'ruby', min: 1, max: 1, chance: 0.06 },
+      { itemId: 'mystic_robe_bottom', min: 1, max: 1, chance: 0.02 },
+    ],
+    flavor: 'A storm with a grudge and nothing left to lose. Requires Slayer 40.',
+  },
+  {
     id: 'lesser_demon', name: 'Lesser Demon', icon: '👹', hp: 82, attack: 50, defence: 45, maxHit: 11,
     gold: [80, 200],
     drops: [
       { itemId: 'ruby', min: 1, max: 1, chance: 0.06 },
       { itemId: 'rune_sword', min: 1, max: 1, chance: 0.01 },
       { itemId: 'adept_staff', min: 1, max: 1, chance: 0.03 },
+      { itemId: 'mystic_robe_top', min: 1, max: 1, chance: 0.015 },
     ],
     flavor: 'Lesser only by demonic standards.',
+  },
+  {
+    id: 'fire_giant', name: 'Fire Giant', icon: '🔥', hp: 85, attack: 55, defence: 48, maxHit: 12,
+    gold: [90, 220],
+    drops: [
+      { itemId: 'big_bones', min: 1, max: 1, chance: 1 },
+      { itemId: 'coal', min: 2, max: 6, chance: 0.5 },
+      { itemId: 'rune_sword', min: 1, max: 1, chance: 0.008 },
+    ],
+    flavor: 'Smells of ash and bad intentions.',
   },
   {
     id: 'greater_demon', name: 'Greater Demon', icon: '😈', hp: 105, attack: 62, defence: 55, maxHit: 14,
@@ -90,6 +140,7 @@ export const MONSTERS: Monster[] = [
       { itemId: 'ruby', min: 1, max: 1, chance: 0.08 },
       { itemId: 'rune_platelegs', min: 1, max: 1, chance: 0.015 },
       { itemId: 'master_staff', min: 1, max: 1, chance: 0.01 },
+      { itemId: 'mystic_hat', min: 1, max: 1, chance: 0.02 },
     ],
     flavor: 'The reason adventurers write wills.',
   },
@@ -98,10 +149,21 @@ export const MONSTERS: Monster[] = [
     gold: [150, 400],
     drops: [
       { itemId: 'dragon_bones', min: 1, max: 1, chance: 1 },
+      { itemId: 'dragonhide', min: 1, max: 2, chance: 1 },
       { itemId: 'diamond', min: 1, max: 1, chance: 0.06 },
       { itemId: 'rune_platebody', min: 1, max: 1, chance: 0.015 },
     ],
     flavor: 'Old, cold, and covered in sapphire scales.',
+  },
+  {
+    id: 'abyssal_fiend', name: 'Abyssal Fiend', icon: '🐙', hp: 130, attack: 75, defence: 68, maxHit: 16,
+    slayerReq: 75, gold: [180, 450],
+    drops: [
+      { itemId: 'dragonwort', min: 1, max: 3, chance: 0.4 },
+      { itemId: 'abyssal_lash', min: 1, max: 1, chance: 0.02 },
+      { itemId: 'diamond', min: 1, max: 1, chance: 0.08 },
+    ],
+    flavor: 'Reaches out from between worlds. Requires Slayer 75. Hoards the Abyssal Lash.',
   },
   // ——— Bosses ———
   {
@@ -129,6 +191,7 @@ export const MONSTERS: Monster[] = [
     hp: 350, attack: 80, defence: 70, maxHit: 17, gold: [1000, 2500],
     drops: [
       { itemId: 'dragon_bones', min: 2, max: 5, chance: 1 },
+      { itemId: 'dragonhide', min: 2, max: 4, chance: 1 },
       { itemId: 'wyrm_scale_shield', min: 1, max: 1, chance: 0.2 },
       { itemId: 'frost_amulet', min: 1, max: 1, chance: 0.15 },
     ],
@@ -152,6 +215,17 @@ export const MONSTERS: Monster[] = [
       { itemId: 'diamond', min: 2, max: 5, chance: 1 },
     ],
     flavor: 'The hungry dark at the end of everything. Drops the Void Amulet.',
+  },
+  {
+    id: 'nethrax', name: 'Nethrax, Devourer of Souls', icon: '👁️', boss: true, levelReq: 110, slayerReq: 90,
+    hp: 900, attack: 115, defence: 105, maxHit: 27, gold: [8000, 20000],
+    drops: [
+      { itemId: 'soul_reaver', min: 1, max: 1, chance: 0.12 },
+      { itemId: 'void_staff', min: 1, max: 1, chance: 0.12 },
+      { itemId: 'soulbow', min: 1, max: 1, chance: 0.12 },
+      { itemId: 'diamond', min: 2, max: 6, chance: 1 },
+    ],
+    flavor: 'Only master slayers may face it (Slayer 90). Hoards the Soul Reaver, Void Staff and Soulbow.',
   },
 ];
 

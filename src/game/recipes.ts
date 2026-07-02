@@ -11,12 +11,22 @@ const recipes: Recipe[] = [
   { id: 'craft_sapphire_amulet', name: 'Sapphire Amulet', icon: '📿', skill: 'crafting', level: 20, xp: 65, inputs: { sapphire: 1 }, goldCost: 100, output: 'sapphire_amulet' },
   { id: 'craft_emerald_amulet', name: 'Emerald Amulet', icon: '📿', skill: 'crafting', level: 35, xp: 85, inputs: { emerald: 1 }, goldCost: 250, output: 'emerald_amulet' },
   { id: 'craft_ruby_amulet', name: 'Ruby Amulet', icon: '📿', skill: 'crafting', level: 50, xp: 110, inputs: { ruby: 1 }, goldCost: 500, output: 'ruby_amulet' },
+  { id: 'craft_dhide_coif', name: 'Dragonhide Coif', icon: '🪖', skill: 'crafting', level: 55, xp: 130, inputs: { dragonhide: 1 }, output: 'dragonhide_coif' },
+  { id: 'craft_dhide_chaps', name: 'Dragonhide Chaps', icon: '👖', skill: 'crafting', level: 59, xp: 155, inputs: { dragonhide: 2 }, output: 'dragonhide_chaps' },
+  { id: 'craft_dhide_body', name: 'Dragonhide Body', icon: '🥋', skill: 'crafting', level: 63, xp: 185, inputs: { dragonhide: 3 }, output: 'dragonhide_body' },
   { id: 'craft_diamond_amulet', name: 'Diamond Amulet', icon: '📿', skill: 'crafting', level: 70, xp: 140, inputs: { diamond: 1 }, goldCost: 1000, output: 'diamond_amulet' },
   // Alchemy
   { id: 'brew_attack', name: 'Attack Potion', icon: '🧪', skill: 'alchemy', level: 5, xp: 40, inputs: { sunleaf: 2 }, output: 'attack_potion' },
   { id: 'brew_defence', name: 'Defence Potion', icon: '🧪', skill: 'alchemy', level: 15, xp: 55, inputs: { sunleaf: 1, mossbloom: 1 }, output: 'defence_potion' },
   { id: 'brew_strength', name: 'Strength Potion', icon: '🧪', skill: 'alchemy', level: 25, xp: 70, inputs: { mossbloom: 2 }, output: 'strength_potion' },
+  { id: 'brew_ranging', name: 'Ranging Potion', icon: '🧪', skill: 'alchemy', level: 35, xp: 85, inputs: { mossbloom: 1, dragonwort: 1 }, output: 'ranging_potion' },
+  { id: 'brew_magic', name: 'Magic Potion', icon: '🧪', skill: 'alchemy', level: 40, xp: 95, inputs: { dragonwort: 1, sunleaf: 2 }, output: 'magic_potion' },
   { id: 'brew_elixir', name: 'Healing Elixir', icon: '🍶', skill: 'alchemy', level: 45, xp: 120, inputs: { dragonwort: 1, berries: 3 }, output: 'healing_elixir' },
+  { id: 'brew_prayer', name: 'Prayer Potion', icon: '🍷', skill: 'alchemy', level: 50, xp: 130, inputs: { duskthorn: 1, berries: 2 }, output: 'prayer_potion' },
+  { id: 'brew_super_attack', name: 'Super Attack Potion', icon: '⚗️', skill: 'alchemy', level: 60, xp: 160, inputs: { duskthorn: 1, sunleaf: 2 }, output: 'super_attack_potion' },
+  { id: 'brew_super_defence', name: 'Super Defence Potion', icon: '⚗️', skill: 'alchemy', level: 66, xp: 175, inputs: { duskthorn: 1, mossbloom: 2 }, output: 'super_defence_potion' },
+  { id: 'brew_super_strength', name: 'Super Strength Potion', icon: '⚗️', skill: 'alchemy', level: 72, xp: 190, inputs: { duskthorn: 2, dragonwort: 1 }, output: 'super_strength_potion' },
+  { id: 'brew_void_elixir', name: 'Grand Healing Elixir', icon: '🍶', skill: 'alchemy', level: 85, xp: 260, inputs: { voidcap: 1, dragonwort: 1 }, output: 'healing_elixir', outputQty: 3 },
 ];
 
 // Smithing: smelt bars, then forge gear

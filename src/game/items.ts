@@ -1,4 +1,5 @@
-import { Item } from './types';
+import { Item, SkillId } from './types';
+import { SKILLS } from './skills';
 
 /** Metal tiers shared by items (gear) and recipes (smithing). */
 export const METALS = [
@@ -46,7 +47,7 @@ const list: Item[] = [
   { id: 'mithril_ore', name: 'Mithril Ore', icon: '🔵', value: 80 },
   { id: 'adamantite_ore', name: 'Adamantite Ore', icon: '🟢', value: 160 },
   { id: 'runite_ore', name: 'Runite Ore', icon: '🩵', value: 320 },
-  // Gems (rare mining finds)
+  // Gems
   { id: 'sapphire', name: 'Sapphire', icon: '💙', value: 150 },
   { id: 'emerald', name: 'Emerald', icon: '💚', value: 300 },
   { id: 'ruby', name: 'Ruby', icon: '❤️‍🔥', value: 600 },
@@ -57,35 +58,52 @@ const list: Item[] = [
   { id: 'sunleaf', name: 'Sunleaf Herb', icon: '🌿', value: 15 },
   { id: 'mossbloom', name: 'Mossbloom Herb', icon: '☘️', value: 40 },
   { id: 'dragonwort', name: 'Dragonwort Herb', icon: '🍀', value: 90 },
+  { id: 'duskthorn', name: 'Duskthorn Herb', icon: '🥀', value: 140 },
+  { id: 'voidcap', name: 'Voidcap Mushroom', icon: '🍄', value: 220 },
   { id: 'golden_apple', name: 'Golden Apple', icon: '🍎', value: 120, heals: 10 },
   // Crafting materials & monster parts
   { id: 'bowstring', name: 'Bowstring', icon: '🧶', value: 20 },
   { id: 'cowhide', name: 'Cowhide', icon: '🐮', value: 8 },
   { id: 'leather', name: 'Leather', icon: '🟫', value: 15 },
-  { id: 'bones', name: 'Bones', icon: '🦴', value: 4 },
-  { id: 'big_bones', name: 'Big Bones', icon: '🦴', value: 12 },
-  { id: 'dragon_bones', name: 'Dragon Bones', icon: '🦴', value: 50 },
+  { id: 'dragonhide', name: 'Dragonhide', icon: '🐲', value: 120 },
+  { id: 'bones', name: 'Bones', icon: '🦴', value: 4, bury: { xp: 5, points: 2 } },
+  { id: 'big_bones', name: 'Big Bones', icon: '🦴', value: 12, bury: { xp: 15, points: 4 } },
+  { id: 'dragon_bones', name: 'Dragon Bones', icon: '🦴', value: 50, bury: { xp: 72, points: 10 } },
   // Leather armour
   { id: 'leather_coif', name: 'Leather Coif', icon: '🪖', value: 30, slot: 'helmet', defenceBonus: 2, levelReq: { skill: 'defence', level: 1 } },
   { id: 'leather_body', name: 'Leather Body', icon: '🥋', value: 50, slot: 'body', defenceBonus: 4, levelReq: { skill: 'defence', level: 1 } },
   { id: 'leather_chaps', name: 'Leather Chaps', icon: '👖', value: 40, slot: 'legs', defenceBonus: 3, levelReq: { skill: 'defence', level: 1 } },
+  // Dragonhide armour (ranged)
+  { id: 'dragonhide_coif', name: 'Dragonhide Coif', icon: '🪖', value: 2000, slot: 'helmet', rangedBonus: 6, defenceBonus: 8, levelReq: { skill: 'ranged', level: 40 } },
+  { id: 'dragonhide_body', name: 'Dragonhide Body', icon: '🥋', value: 4000, slot: 'body', rangedBonus: 10, defenceBonus: 14, levelReq: { skill: 'ranged', level: 40 } },
+  { id: 'dragonhide_chaps', name: 'Dragonhide Chaps', icon: '👖', value: 3000, slot: 'legs', rangedBonus: 8, defenceBonus: 10, levelReq: { skill: 'ranged', level: 40 } },
+  // Mystic robes (magic)
+  { id: 'mystic_hat', name: 'Mystic Hat', icon: '🎩', value: 2000, slot: 'helmet', magicBonus: 5, defenceBonus: 4, levelReq: { skill: 'magic', level: 40 } },
+  { id: 'mystic_robe_top', name: 'Mystic Robe Top', icon: '🥻', value: 4000, slot: 'body', magicBonus: 8, defenceBonus: 6, levelReq: { skill: 'magic', level: 40 } },
+  { id: 'mystic_robe_bottom', name: 'Mystic Robe Bottom', icon: '👖', value: 3000, slot: 'legs', magicBonus: 6, defenceBonus: 5, levelReq: { skill: 'magic', level: 40 } },
   // Shields
   { id: 'wooden_shield', name: 'Wooden Shield', icon: '🛡️', value: 20, slot: 'shield', defenceBonus: 3, levelReq: { skill: 'defence', level: 1 } },
   // Staves
   { id: 'apprentice_staff', name: 'Apprentice Staff', icon: '🪄', value: 50, slot: 'weapon', combatStyle: 'magic', magicBonus: 6, levelReq: { skill: 'magic', level: 1 } },
   { id: 'adept_staff', name: 'Adept Staff', icon: '🪄', value: 800, slot: 'weapon', combatStyle: 'magic', magicBonus: 22, levelReq: { skill: 'magic', level: 30 } },
   { id: 'master_staff', name: 'Master Staff', icon: '🔮', value: 4000, slot: 'weapon', combatStyle: 'magic', magicBonus: 42, levelReq: { skill: 'magic', level: 60 } },
-  // Gem amulets (crafted)
+  // Gem amulets
   { id: 'sapphire_amulet', name: 'Sapphire Amulet', icon: '📿', value: 400, slot: 'amulet', attackBonus: 4, magicBonus: 4, levelReq: { skill: 'defence', level: 1 } },
   { id: 'emerald_amulet', name: 'Emerald Amulet', icon: '📿', value: 800, slot: 'amulet', defenceBonus: 6, rangedBonus: 4, levelReq: { skill: 'defence', level: 1 } },
   { id: 'ruby_amulet', name: 'Ruby Amulet', icon: '📿', value: 1500, slot: 'amulet', strengthBonus: 8, levelReq: { skill: 'defence', level: 1 } },
   { id: 'diamond_amulet', name: 'Diamond Amulet', icon: '📿', value: 3000, slot: 'amulet', attackBonus: 8, strengthBonus: 8, levelReq: { skill: 'defence', level: 1 } },
-  // Potions (brewed)
+  // Potions
   { id: 'attack_potion', name: 'Attack Potion', icon: '🧪', value: 60, boost: { skill: 'attack', amount: 8 } },
   { id: 'strength_potion', name: 'Strength Potion', icon: '🧪', value: 80, boost: { skill: 'strength', amount: 8 } },
   { id: 'defence_potion', name: 'Defence Potion', icon: '🧪', value: 70, boost: { skill: 'defence', amount: 8 } },
+  { id: 'ranging_potion', name: 'Ranging Potion', icon: '🧪', value: 120, boost: { skill: 'ranged', amount: 8 } },
+  { id: 'magic_potion', name: 'Magic Potion', icon: '🧪', value: 120, boost: { skill: 'magic', amount: 8 } },
+  { id: 'super_attack_potion', name: 'Super Attack Potion', icon: '⚗️', value: 250, boost: { skill: 'attack', amount: 14 } },
+  { id: 'super_strength_potion', name: 'Super Strength Potion', icon: '⚗️', value: 300, boost: { skill: 'strength', amount: 14 } },
+  { id: 'super_defence_potion', name: 'Super Defence Potion', icon: '⚗️', value: 280, boost: { skill: 'defence', amount: 14 } },
+  { id: 'prayer_potion', name: 'Prayer Potion', icon: '🍷', value: 200, restorePrayer: 25 },
   { id: 'healing_elixir', name: 'Healing Elixir', icon: '🍶', value: 150, heals: 30 },
-  // Boss uniques
+  // Boss & slayer uniques
   { id: 'bone_crusher', name: 'Bone Crusher', icon: '🦴', value: 5000, slot: 'weapon', combatStyle: 'melee', attackBonus: 22, strengthBonus: 24, levelReq: { skill: 'attack', level: 30 } },
   { id: 'obsidian_blade', name: 'Obsidian Blade', icon: '🗡️', value: 12000, slot: 'weapon', combatStyle: 'melee', attackBonus: 34, strengthBonus: 32, levelReq: { skill: 'attack', level: 45 } },
   { id: 'molten_shield', name: 'Molten Shield', icon: '🛡️', value: 10000, slot: 'shield', defenceBonus: 24, levelReq: { skill: 'defence', level: 40 } },
@@ -94,6 +112,12 @@ const list: Item[] = [
   { id: 'kings_greatsword', name: "King's Greatsword", icon: '⚔️', value: 60000, slot: 'weapon', combatStyle: 'melee', attackBonus: 48, strengthBonus: 45, levelReq: { skill: 'attack', level: 60 } },
   { id: 'crown_of_kings', name: 'Crown of Kings', icon: '👑', value: 50000, slot: 'helmet', defenceBonus: 32, levelReq: { skill: 'defence', level: 60 } },
   { id: 'void_amulet', name: 'Void Amulet', icon: '🌑', value: 150000, slot: 'amulet', attackBonus: 15, strengthBonus: 15, defenceBonus: 15, rangedBonus: 15, magicBonus: 15, levelReq: { skill: 'defence', level: 1 } },
+  { id: 'abyssal_lash', name: 'Abyssal Lash', icon: '🐙', value: 120000, slot: 'weapon', combatStyle: 'melee', attackBonus: 42, strengthBonus: 40, levelReq: { skill: 'attack', level: 60 } },
+  { id: 'soul_reaver', name: 'Soul Reaver', icon: '🌘', value: 500000, slot: 'weapon', combatStyle: 'melee', attackBonus: 52, strengthBonus: 50, levelReq: { skill: 'attack', level: 70 } },
+  { id: 'void_staff', name: 'Void Staff', icon: '🌌', value: 500000, slot: 'weapon', combatStyle: 'magic', magicBonus: 55, levelReq: { skill: 'magic', level: 70 } },
+  { id: 'soulbow', name: 'Soulbow', icon: '🏹', value: 500000, slot: 'weapon', combatStyle: 'ranged', rangedBonus: 58, levelReq: { skill: 'ranged', level: 70 } },
+  // Slayer reward cape
+  { id: 'slayer_cape', name: 'Slayer Cape', icon: '🧣', value: 99000, slot: 'cape', attackBonus: 4, strengthBonus: 4, rangedBonus: 4, magicBonus: 4, defenceBonus: 6, levelReq: { skill: 'slayer', level: 50 } },
 ];
 
 // Generated: metal bars + melee gear per tier
@@ -118,6 +142,19 @@ for (const f of FISH) {
 // Generated: bows
 for (const b of BOWS) {
   list.push({ id: b.id, name: b.name, icon: '🏹', value: b.value, slot: 'weapon', combatStyle: 'ranged', rangedBonus: b.ranged, levelReq: { skill: 'ranged', level: b.equipLevel } });
+}
+
+// Generated: Capes of Accomplishment, one per skill, requiring level 99
+for (const sk of SKILLS) {
+  list.push({
+    id: `${sk.id}_cape`,
+    name: `${sk.name} Cape`,
+    icon: '🧣',
+    value: 99000,
+    slot: 'cape',
+    defenceBonus: 8,
+    levelReq: { skill: sk.id as SkillId, level: 99 },
+  });
 }
 
 export const ITEMS: Record<string, Item> = Object.fromEntries(list.map((i) => [i.id, i]));

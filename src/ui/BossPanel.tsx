@@ -1,13 +1,14 @@
 import { BOSSES, MONSTER_MAP } from '../game/monsters';
 import { ITEMS } from '../game/items';
 import { useDispatch, useGame } from '../state/store';
-import { combatLevel } from '../game/combat';
+import { combatLevel, lvl } from '../game/combat';
 import FightView from './FightView';
 
 export default function BossPanel() {
   const s = useGame();
   const dispatch = useDispatch();
   const cb = combatLevel(s);
+  const slayerLvl = lvl(s, 'slayer');
 
   if (s.activity?.type === 'combat' && MONSTER_MAP[s.activity.monsterId].boss) {
     const m = MONSTER_MAP[s.activity.monsterId];
@@ -23,13 +24,13 @@ export default function BossPanel() {
       <div className="panel-header">
         <h2>👹 Bosses</h2>
         <p className="muted">
-          Five great evils, each gated by combat level (yours: <strong>{cb}</strong>). Bosses do
+          Six great evils, each gated by combat level (yours: <strong>{cb}</strong>). Bosses do
           not respawn mid-fight — win, and claim a shot at their unique drops.
         </p>
       </div>
       <div className="boss-list">
         {BOSSES.map((m) => {
-          const locked = cb < (m.levelReq ?? 0);
+          const locked = cb < (m.levelReq ?? 0) || slayerLvl < (m.slayerReq ?? 0);
           const kills = s.kills[m.id] ?? 0;
           return (
             <div key={m.id} className={`card boss-card ${locked ? 'locked' : ''} ${kills > 0 ? 'defeated' : ''}`}>
@@ -40,7 +41,7 @@ export default function BossPanel() {
                 </div>
                 <div className="muted small">{m.flavor}</div>
                 <div className="small">
-                  Combat {m.levelReq}+ · ❤️ {m.hp} · max hit {m.maxHit}
+                  Combat {m.levelReq}+{m.slayerReq ? ` · Slayer ${m.slayerReq}+` : ''} · ❤️ {m.hp} · max hit {m.maxHit}
                 </div>
                 <div className="small muted">
                   Uniques:{' '}
@@ -52,7 +53,10 @@ export default function BossPanel() {
                 </div>
               </div>
               {locked ? (
-                <div className="lock-note">🔒 Combat {m.levelReq}</div>
+                <div className="lock-note">
+                  🔒 Combat {m.levelReq}
+                  {m.slayerReq ? ` + Slayer ${m.slayerReq}` : ''}
+                </div>
               ) : (
                 <button className="btn primary" onClick={() => dispatch({ type: 'START_COMBAT', id: m.id })}>
                   ⚔️ Challenge

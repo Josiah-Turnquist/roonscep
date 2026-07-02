@@ -10,6 +10,7 @@ const SLOTS: { slot: EquipSlot; label: string; empty: string }[] = [
   { slot: 'legs', label: 'Legs', empty: '👖' },
   { slot: 'shield', label: 'Shield', empty: '🛡️' },
   { slot: 'amulet', label: 'Amulet', empty: '📿' },
+  { slot: 'cape', label: 'Cape', empty: '🧣' },
 ];
 
 function bonusLine(id: string): string {
@@ -76,7 +77,11 @@ export default function InventoryPanel() {
                   {bonusLine(id)}
                   {it.heals ? `heals ${it.heals}` : ''}
                   {it.boost ? `+${it.boost.amount} ${it.boost.skill}` : ''}
-                  {!bonusLine(id) && !it.heals && !it.boost ? `worth ${it.value.toLocaleString()} gold` : ''}
+                  {it.restorePrayer ? `restores ${it.restorePrayer} prayer` : ''}
+                  {it.bury ? `${it.bury.xp} prayer xp buried` : ''}
+                  {!bonusLine(id) && !it.heals && !it.boost && !it.restorePrayer && !it.bury
+                    ? `worth ${it.value.toLocaleString()} gold`
+                    : ''}
                 </div>
                 <div className="inv-actions">
                   {it.slot && (
@@ -89,9 +94,14 @@ export default function InventoryPanel() {
                       Eat
                     </button>
                   )}
-                  {it.boost && (
+                  {(it.boost || it.restorePrayer) && (
                     <button className="btn small" onClick={() => dispatch({ type: 'DRINK', itemId: id })}>
                       Drink
+                    </button>
+                  )}
+                  {it.bury && (
+                    <button className="btn small" onClick={() => dispatch({ type: 'BURY', itemId: id, qty })}>
+                      Bury all
                     </button>
                   )}
                   <button className="btn small" onClick={() => dispatch({ type: 'SELL', itemId: id, qty: 1 })}>
