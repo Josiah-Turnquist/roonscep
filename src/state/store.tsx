@@ -648,6 +648,14 @@ function reduceInner(state: GameState, action: Action): GameState {
       const nx = s.world.px + action.dx;
       const ny = s.world.py + action.dy;
       if (!isWalkable(nx, ny)) return state;
+      // no cutting corners: a diagonal step needs both adjacent cardinals open
+      if (
+        action.dx !== 0 &&
+        action.dy !== 0 &&
+        (!isWalkable(s.world.px + action.dx, s.world.py) || !isWalkable(s.world.px, s.world.py + action.dy))
+      ) {
+        return state;
+      }
       s.world.px = nx;
       s.world.py = ny;
       if (s.activity) s.activity = null; // moving interrupts work

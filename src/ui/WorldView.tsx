@@ -24,7 +24,11 @@ function findPath(
   const prev = new Map<number, number>();
   const seen = new Set([key(sx, sy)]);
   const queue: [number, number][] = [[sx, sy]];
-  const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  // diagonals first so open ground favours the direct line
+  const DIRS: [number, number][] = [
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+  ];
   let goal: [number, number] | null = null;
   for (let qi = 0; qi < queue.length && qi < 4000 && !goal; qi++) {
     const [cx, cy] = queue[qi];
@@ -32,6 +36,8 @@ function findPath(
       const nx = cx + dx;
       const ny = cy + dy;
       if (seen.has(key(nx, ny)) || !isWalkable(nx, ny)) continue;
+      // same corner rule as the reducer
+      if (dx !== 0 && dy !== 0 && (!isWalkable(cx + dx, cy) || !isWalkable(cx, cy + dy))) continue;
       seen.add(key(nx, ny));
       prev.set(key(nx, ny), key(cx, cy));
       if (isGoal(nx, ny)) {
@@ -65,8 +71,11 @@ type DialogState =
 
 /** Logical ms per tile step; visual speed slightly outruns it so motion stays continuous. */
 const WALK_MS = 260;
+const DIAG_MS = Math.round(WALK_MS * Math.SQRT2); // diagonals cover √2 the ground
 const PLAYER_SPEED = 1000 / WALK_MS + 0.35;
 const MONSTER_SPEED = 1.6;
+
+const isDiagonal = (step: [number, number]) => step[0] !== 0 && step[1] !== 0;
 
 /** Move at constant speed toward target; returns remaining distance. */
 function moveTowards(obj: THREE.Object3D, target: THREE.Vector3, speed: number, dt: number): number {
@@ -77,7 +86,9 @@ function moveTowards(obj: THREE.Object3D, target: THREE.Vector3, speed: number, 
     return 0;
   }
   if (dist > 1e-4) {
-    const step = Math.min(dist, speed * dt);
+    // catch up faster when trailing badly (e.g. long diagonal chains)
+    const boosted = speed * (1 + Math.max(0, dist - 1.2));
+    const step = Math.min(dist, boosted * dt);
     obj.position.add(delta.multiplyScalar(step / dist));
   }
   return Math.max(0, dist - speed * dt);
@@ -165,7 +176,7 @@ export default function WorldView() {
     pathRef.current = [];
     pendingRef.current = null;
     if (walkTimer.current !== null) {
-      window.clearInterval(walkTimer.current);
+      window.clearTimeout(walkTimer.current);
       walkTimer.current = null;
     }
   }, []);
@@ -180,15 +191,21 @@ export default function WorldView() {
         pendingRef.current = null;
         return;
       }
-      walkTimer.current = window.setInterval(() => {
+      const runNext = () => {
         const step = pathRef.current.shift();
         if (step) dispatch({ type: 'MOVE_STEP', dx: step[0], dy: step[1] });
         if (pathRef.current.length === 0) {
           const act = pendingRef.current;
           stopWalking();
           act?.();
+          return;
         }
-      }, WALK_MS);
+        walkTimer.current = window.setTimeout(
+          runNext,
+          isDiagonal(pathRef.current[0]) ? DIAG_MS : WALK_MS,
+        );
+      };
+      walkTimer.current = window.setTimeout(runNext, isDiagonal(steps[0]) ? DIAG_MS : WALK_MS);
     },
     [dispatch, stopWalking],
   );
@@ -454,18 +471,30 @@ export default function WorldView() {
       const st = stateRef.current;
 
       // keyboard movement, rotated to face the camera
-      if ([...keys].some((k) => KEYMAP[k])) {
-        moveAccum += dt;
-        if (moveAccum >= WALK_MS / 1000) {
-          moveAccum = 0;
-          const k = [...keys].find((kk) => KEYMAP[kk])!;
-          let [dx, dy] = KEYMAP[k];
-          const quad = ((Math.round(cam.yaw / (Math.PI / 2)) % 4) + 4) % 4;
-          for (let i = 0; i < quad; i++) [dx, dy] = [dy, -dx];
-          dispatch({ type: 'MOVE_STEP', dx, dy });
+      {
+        // combine held keys so W+D walks the diagonal, rotated to the camera
+        let kdx = 0;
+        let kdy = 0;
+        for (const k of keys) {
+          if (KEYMAP[k]) {
+            kdx += KEYMAP[k][0];
+            kdy += KEYMAP[k][1];
+          }
         }
-      } else {
-        moveAccum = WALK_MS / 1000;
+        kdx = Math.sign(kdx);
+        kdy = Math.sign(kdy);
+        if (kdx !== 0 || kdy !== 0) {
+          moveAccum += dt;
+          const stepMs = kdx !== 0 && kdy !== 0 ? DIAG_MS : WALK_MS;
+          if (moveAccum >= stepMs / 1000) {
+            moveAccum = 0;
+            const quad = ((Math.round(cam.yaw / (Math.PI / 2)) % 4) + 4) % 4;
+            for (let i = 0; i < quad; i++) [kdx, kdy] = [kdy, -kdx];
+            dispatch({ type: 'MOVE_STEP', dx: kdx, dy: kdy });
+          }
+        } else {
+          moveAccum = WALK_MS / 1000;
+        }
       }
       if (keys.has('q')) cam.yaw += dt * 1.8;
       if (keys.has('e')) cam.yaw -= dt * 1.8;
