@@ -102,7 +102,7 @@ function initialState(): GameState {
     quests: {},
     achievements: [],
     stats: { ...ZERO_STATS },
-    settings: { autoEat: true, autoEatThreshold: 0.4 },
+    settings: { autoEat: true, autoEatThreshold: 0.4, chainCombat: false },
     log: [{ id: 0, text: 'Welcome to Skillbound! Click the ground to walk (WASD works too), drag or press Q/E to spin the camera, and click trees, rocks, folk and monsters to act on them.', kind: 'info' }],
     logCounter: 1,
     fx: [],
@@ -304,9 +304,9 @@ function playerAttacks(s: GameState, m: Monster): boolean {
       const ent = s.world.entities.find((e) => e.uid === slainUid);
       if (ent) ent.respawn = ENTITY_RESPAWN_TICKS;
     }
-    // Auto-combat re-engages the nearest surviving monster of the same kind nearby
+    // Chain combat (opt-in): re-engage the nearest surviving monster of the same kind
     let next: number | undefined;
-    if (!m.boss && s.autoCombat) {
+    if (!m.boss && s.autoCombat && s.settings.chainCombat) {
       let best = 99;
       for (const e of s.world.entities) {
         if (e.defId !== m.id || e.respawn > 0 || e.uid === slainUid) continue;

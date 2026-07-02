@@ -181,6 +181,8 @@ export interface Settings {
   autoEat: boolean;
   /** Auto-eat when HP falls below this fraction of max. */
   autoEatThreshold: number;
+  /** After a kill, automatically engage the nearest monster of the same kind. */
+  chainCombat: boolean;
 }
 
 export interface GameState {

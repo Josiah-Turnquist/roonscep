@@ -65,6 +65,13 @@ export default function CombatHud() {
         <button className="btn danger" onClick={() => dispatch({ type: 'FLEE' })}>
           🏃 Flee
         </button>
+        <button
+          className={`btn small ${s.settings.chainCombat ? 'active-toggle' : ''}`}
+          title="Chain combat: after a kill, automatically engage the nearest monster of the same kind"
+          onClick={() => dispatch({ type: 'SET_SETTINGS', patch: { chainCombat: !s.settings.chainCombat } })}
+        >
+          ⛓️ Chain
+        </button>
         {playerStyle(s) === 'melee' &&
           STYLES.map((st) => (
             <button

@@ -105,6 +105,14 @@ export default function CharacterPanel() {
             <option value={0.7}>70%</option>
           </select>
         </label>
+        <label className="setting-row">
+          <input
+            type="checkbox"
+            checked={s.settings.chainCombat}
+            onChange={(e) => dispatch({ type: 'SET_SETTINGS', patch: { chainCombat: e.target.checked } })}
+          />
+          Chain combat: after a kill, automatically engage the nearest monster of the same kind
+        </label>
         <p className="muted small">
           Offline progress: gathering, thieving and crafting continue for up to 6 hours while the
           game is closed. Combat pauses.

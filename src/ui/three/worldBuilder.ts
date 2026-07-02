@@ -7,6 +7,7 @@ import {
 } from '../../game/world';
 import { MONSTER_MAP } from '../../game/monsters';
 import { GATHER_MAP } from '../../game/actions';
+import { buildNpcModel } from './models';
 
 // ——— terrain profile ———
 
@@ -86,28 +87,6 @@ function solid(
 }
 
 // ——— sprite helpers ———
-
-export function makeEmojiSprite(emoji: string, size: number): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  ctx.font = '96px serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 6;
-  ctx.shadowOffsetY = 4;
-  ctx.fillText(emoji, 64, 70);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }),
-  );
-  sprite.center.set(0.5, 0.08);
-  sprite.scale.set(size, size, 1);
-  sprite.renderOrder = 2;
-  return sprite;
-}
 
 export function makeTextSprite(text: string, color = '#ffe873', height = 0.4): THREE.Sprite {
   const canvas = document.createElement('canvas');
@@ -438,12 +417,16 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
   // — NPCs —
   for (const n of NPCS) {
     const p = tilePos(n.x, n.y);
-    const sprite = makeEmojiSprite(n.icon, 1.15);
-    sprite.position.copy(p);
-    sprite.userData = { kind: 'npc', id: n.id, label: `${n.name} — click to talk` };
-    interactables.add(sprite);
+    const model = buildNpcModel(n);
+    model.group.position.copy(p);
+    // face the nearest road-ish direction: toward the player spawn feels natural enough
+    model.group.rotation.y = Math.PI + hash(n.x, n.y) * 1.2 - 0.6;
+    const data = { kind: 'npc', id: n.id, label: `${n.name} — click to talk` };
+    model.group.userData = data;
+    model.group.traverse((o) => (o.userData = data));
+    interactables.add(model.group);
     const label = makeTextSprite(n.name, '#ffe873', 0.3);
-    label.position.set(p.x, p.y + 1.35, p.z);
+    label.position.set(p.x, p.y + 1.5, p.z);
     overlay.add(label);
     if (n.kind === 'quest') {
       const marker = solid(new THREE.OctahedronGeometry(0.12, 0), 0xe8b64c, { emissive: 0xe8b64c, ei: 0.9 });
@@ -462,27 +445,3 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
   return { pickables: [terrain, interactables], interactables, overlay, nodeVisuals, animated };
 }
 
-/** Low-poly player character: robe, head, wizard hat. */
-export function buildPlayer(): THREE.Group {
-  const g = new THREE.Group();
-  const robe = solid(new THREE.ConeGeometry(0.32, 0.85, 8), 0x3a4a8c);
-  robe.position.y = 0.42;
-  g.add(robe);
-  const head = solid(new THREE.SphereGeometry(0.17, 10, 8), 0xe0b58a);
-  head.position.y = 0.98;
-  g.add(head);
-  const brim = solid(new THREE.CylinderGeometry(0.3, 0.3, 0.05, 10), 0x2c3a75);
-  brim.position.y = 1.12;
-  g.add(brim);
-  const hat = solid(new THREE.ConeGeometry(0.2, 0.42, 8), 0x2c3a75);
-  hat.position.y = 1.34;
-  g.add(hat);
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.34, 0.44, 24),
-    new THREE.MeshBasicMaterial({ color: 0xe8dcc0, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.04;
-  g.add(ring);
-  return g;
-}

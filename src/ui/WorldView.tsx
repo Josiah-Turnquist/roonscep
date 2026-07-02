@@ -7,9 +7,8 @@ import {
 import { MONSTER_MAP } from '../game/monsters';
 import { GATHER_MAP } from '../game/actions';
 import { GameState, MonsterEntity } from '../game/types';
-import {
-  buildPlayer, buildWorld, makeEmojiSprite, tilePos, WorldHandles,
-} from './three/worldBuilder';
+import { buildWorld, tilePos, WorldHandles } from './three/worldBuilder';
+import { buildMonsterModel, buildPlayerModel, CharModel } from './three/models';
 import { NpcDialog, StationDialog } from './Dialogs';
 import CombatHud from './CombatHud';
 
@@ -63,6 +62,38 @@ type DialogState =
   | { kind: 'npc'; npcId: string }
   | { kind: 'station'; station: StationType }
   | null;
+
+/** Logical ms per tile step; visual speed slightly outruns it so motion stays continuous. */
+const WALK_MS = 260;
+const PLAYER_SPEED = 1000 / WALK_MS + 0.35;
+const MONSTER_SPEED = 1.6;
+
+/** Move at constant speed toward target; returns remaining distance. */
+function moveTowards(obj: THREE.Object3D, target: THREE.Vector3, speed: number, dt: number): number {
+  const delta = target.clone().sub(obj.position);
+  const dist = delta.length();
+  if (dist > 6) {
+    obj.position.copy(target); // teleport (death, respawn)
+    return 0;
+  }
+  if (dist > 1e-4) {
+    const step = Math.min(dist, speed * dt);
+    obj.position.add(delta.multiplyScalar(step / dist));
+  }
+  return Math.max(0, dist - speed * dt);
+}
+
+/** Smoothly turn to face a point (shortest arc). */
+function faceTowards(obj: THREE.Object3D, target: THREE.Vector3, dt: number) {
+  const dx = target.x - obj.position.x;
+  const dz = target.z - obj.position.z;
+  if (dx * dx + dz * dz < 1e-4) return;
+  const desired = Math.atan2(dx, dz);
+  let diff = desired - obj.rotation.y;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  obj.rotation.y += diff * Math.min(1, dt * 10);
+}
 
 interface Splat {
   sprite: THREE.Sprite;
@@ -157,7 +188,7 @@ export default function WorldView() {
           stopWalking();
           act?.();
         }
-      }, 140);
+      }, WALK_MS);
     },
     [dispatch, stopWalking],
   );
@@ -192,24 +223,27 @@ export default function WorldView() {
     const world: WorldHandles = buildWorld(scene);
 
     // player
-    const player = buildPlayer();
+    const playerModel = buildPlayerModel();
+    const player = playerModel.group;
     const st0 = stateRef.current;
     player.position.copy(tilePos(st0.world.px, st0.world.py));
     scene.add(player);
+    let playerMoving = 0;
 
     // monster entities
-    const entitySprites = new Map<number, THREE.Sprite>();
+    const entityModels = new Map<number, CharModel>();
     for (const e of st0.world.entities) {
       const def = MONSTER_MAP[e.defId];
-      const size = 0.8 + Math.min(1.1, def.hp / 140);
-      const sprite = makeEmojiSprite(def.icon, size);
-      sprite.position.copy(tilePos(e.x, e.y));
-      sprite.userData = {
+      const model = buildMonsterModel(e.defId);
+      model.group.position.copy(tilePos(e.x, e.y));
+      const data = {
         kind: 'monster', uid: e.uid,
         label: `${def.name} (❤️ ${def.hp}${def.slayerReq ? `, slayer ${def.slayerReq}` : ''}) — click to attack`,
       };
-      world.interactables.add(sprite);
-      entitySprites.set(e.uid, sprite);
+      model.group.userData = data;
+      model.group.traverse((o) => (o.userData = data));
+      world.interactables.add(model.group);
+      entityModels.set(e.uid, model);
     }
 
     // fight visuals: shared hp bar + target ring + lazy boss sprite
@@ -223,7 +257,7 @@ export default function WorldView() {
     targetRing.rotation.x = -Math.PI / 2;
     targetRing.visible = false;
     scene.add(targetRing);
-    let bossSprite: THREE.Sprite | null = null;
+    let bossModel: CharModel | null = null;
     let bossFor: string | null = null;
 
     // transient effects
@@ -274,8 +308,8 @@ export default function WorldView() {
     function fightTargetPos(st: GameState): THREE.Vector3 | null {
       if (st.activity?.type !== 'combat') return null;
       if (st.activity.entityUid !== undefined) {
-        const sp = entitySprites.get(st.activity.entityUid);
-        return sp ? sp.position : null;
+        const m = entityModels.get(st.activity.entityUid);
+        return m ? m.group.position : null;
       }
       const lair = BOSS_LAIRS[st.activity.monsterId];
       return lair ? tilePos(lair.x, lair.y).add(new THREE.Vector3(0, 0.2, 0)) : null;
@@ -422,7 +456,7 @@ export default function WorldView() {
       // keyboard movement, rotated to face the camera
       if ([...keys].some((k) => KEYMAP[k])) {
         moveAccum += dt;
-        if (moveAccum >= 0.15) {
+        if (moveAccum >= WALK_MS / 1000) {
           moveAccum = 0;
           const k = [...keys].find((kk) => KEYMAP[kk])!;
           let [dx, dy] = KEYMAP[k];
@@ -431,17 +465,19 @@ export default function WorldView() {
           dispatch({ type: 'MOVE_STEP', dx, dy });
         }
       } else {
-        moveAccum = 0.15;
+        moveAccum = WALK_MS / 1000;
       }
       if (keys.has('q')) cam.yaw += dt * 1.8;
       if (keys.has('e')) cam.yaw -= dt * 1.8;
 
-      // player
+      // player: constant-speed glide toward the logical tile
       const target = tilePos(st.world.px, st.world.py);
-      const before = player.position.clone();
-      player.position.lerp(target, Math.min(1, dt * 9));
-      const vel = player.position.clone().sub(before);
-      if (vel.lengthSq() > 1e-6) player.rotation.y = Math.atan2(vel.x, vel.z);
+      const remaining = moveTowards(player, target, PLAYER_SPEED, dt);
+      const working =
+        st.activity?.type === 'gather' || st.activity?.type === 'thieve' || st.activity?.type === 'craft';
+      playerMoving += (Math.min(1, remaining * 6) - playerMoving) * Math.min(1, dt * 10);
+      if (remaining > 0.02) faceTowards(player, target, dt);
+      playerModel.update(dt, t, playerMoving, working);
 
       // camera follows
       focus.lerp(target, Math.min(1, dt * 5));
@@ -458,11 +494,19 @@ export default function WorldView() {
       // monsters
       const fightingUid = st.activity?.type === 'combat' ? st.activity.entityUid : undefined;
       for (const e of st.world.entities) {
-        const sprite = entitySprites.get(e.uid);
-        if (!sprite) continue;
+        const model = entityModels.get(e.uid);
+        if (!model) continue;
         const alive = e.respawn === 0;
-        sprite.visible = alive;
-        if (alive) sprite.position.lerp(tilePos(e.x, e.y), Math.min(1, dt * 6));
+        model.group.visible = alive;
+        if (!alive) continue;
+        const etarget = tilePos(e.x, e.y);
+        const erem = moveTowards(model.group, etarget, MONSTER_SPEED, dt);
+        if (e.uid === fightingUid) {
+          faceTowards(model.group, player.position, dt);
+        } else if (erem > 0.02) {
+          faceTowards(model.group, etarget, dt);
+        }
+        model.update(dt, t + e.uid * 0.77, Math.min(1, erem * 4), false);
       }
 
       // node depletion swaps
@@ -476,24 +520,36 @@ export default function WorldView() {
       const fight = st.activity?.type === 'combat' ? st.activity : null;
       if (fight && fight.entityUid === undefined) {
         if (bossFor !== fight.monsterId) {
-          if (bossSprite) scene.remove(bossSprite);
-          const def = MONSTER_MAP[fight.monsterId];
-          bossSprite = makeEmojiSprite(def.icon, 2.2);
-          const lair = BOSS_LAIRS[def.id];
-          if (lair) bossSprite.position.copy(tilePos(lair.x, lair.y));
-          scene.add(bossSprite);
-          bossFor = def.id;
+          if (bossModel) scene.remove(bossModel.group);
+          bossModel = buildMonsterModel(fight.monsterId);
+          const lair = BOSS_LAIRS[fight.monsterId];
+          if (lair) bossModel.group.position.copy(tilePos(lair.x, lair.y));
+          scene.add(bossModel.group);
+          bossFor = fight.monsterId;
         }
-      } else if (bossSprite) {
-        scene.remove(bossSprite);
-        bossSprite = null;
+        if (bossModel) {
+          faceTowards(bossModel.group, player.position, dt);
+          bossModel.update(dt, t, 0, false);
+        }
+      } else if (bossModel) {
+        scene.remove(bossModel.group);
+        bossModel = null;
         bossFor = null;
+      }
+      // face your opponent
+      if (fight) {
+        const ft = fightTargetPos(st);
+        if (ft) faceTowards(player, ft, dt);
       }
       const tpos = fight ? fightTargetPos(st) : null;
       if (fight && tpos) {
         const def = MONSTER_MAP[fight.monsterId];
+        const modelScale =
+          fight.entityUid !== undefined
+            ? entityModels.get(fight.entityUid)?.group.scale.x ?? 1
+            : bossModel?.group.scale.x ?? 2;
         hpBar.sprite.visible = true;
-        hpBar.sprite.position.set(tpos.x, tpos.y + (def.boss ? 2.5 : 1.7), tpos.z);
+        hpBar.sprite.position.set(tpos.x, tpos.y + 1.2 * modelScale + 0.5, tpos.z);
         hpBar.draw(fight.monsterHp / def.hp);
         targetRing.visible = true;
         targetRing.position.set(tpos.x, tpos.y + 0.05, tpos.z);
