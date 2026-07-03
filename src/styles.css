@@ -1063,3 +1063,23 @@ button {
   border-top: 1px solid var(--border);
   padding-top: 8px;
 }
+
+.compass-btn {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(32, 27, 19, 0.88);
+  border: 2px solid var(--border-light);
+  font-size: 20px;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compass-btn:hover {
+  border-color: var(--gold);
+}

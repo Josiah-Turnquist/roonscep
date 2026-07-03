@@ -586,6 +586,13 @@ export function loadState(): GameState {
     }
     return withAchievements(s);
   } catch {
+    // Never clobber a save we failed to read — stash it for manual recovery
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) localStorage.setItem(`${SAVE_KEY}-backup`, raw);
+    } catch {
+      /* storage unavailable */
+    }
     return base;
   }
 }

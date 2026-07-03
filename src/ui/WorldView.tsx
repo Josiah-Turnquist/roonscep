@@ -69,13 +69,11 @@ type DialogState =
   | { kind: 'station'; station: StationType }
   | null;
 
-/** Logical ms per tile step; visual speed slightly outruns it so motion stays continuous. */
-const WALK_MS = 260;
-const DIAG_MS = Math.round(WALK_MS * Math.SQRT2); // diagonals cover √2 the ground
-const PLAYER_SPEED = 1000 / WALK_MS + 0.35;
+/** Visual walk speed in tiles/sec — this IS the pace; steps are consumed as the model arrives. */
+const PLAYER_SPEED = 3.4;
 const MONSTER_SPEED = 1.6;
-
-const isDiagonal = (step: [number, number]) => step[0] !== 0 && step[1] !== 0;
+/** Dispatch the next path step when the model is this close to its current tile. */
+const STEP_TRIGGER = 0.28;
 
 /** Move at constant speed toward target; returns remaining distance. */
 function moveTowards(obj: THREE.Object3D, target: THREE.Vector3, speed: number, dt: number): number {
@@ -170,17 +168,15 @@ export default function WorldView() {
 
   const pathRef = useRef<[number, number][]>([]);
   const pendingRef = useRef<(() => void) | null>(null);
-  const walkTimer = useRef<number | null>(null);
+  const camRef = useRef({ yaw: 0.2, pitch: 0.95, dist: 13 });
 
   const stopWalking = useCallback(() => {
     pathRef.current = [];
     pendingRef.current = null;
-    if (walkTimer.current !== null) {
-      window.clearTimeout(walkTimer.current);
-      walkTimer.current = null;
-    }
   }, []);
 
+  // Steps are consumed by the frame loop as the model nears each tile,
+  // so walking is one continuous glide instead of timed hops.
   const startWalking = useCallback(
     (steps: [number, number][], onArrive: (() => void) | null) => {
       stopWalking();
@@ -189,25 +185,9 @@ export default function WorldView() {
       if (steps.length === 0) {
         onArrive?.();
         pendingRef.current = null;
-        return;
       }
-      const runNext = () => {
-        const step = pathRef.current.shift();
-        if (step) dispatch({ type: 'MOVE_STEP', dx: step[0], dy: step[1] });
-        if (pathRef.current.length === 0) {
-          const act = pendingRef.current;
-          stopWalking();
-          act?.();
-          return;
-        }
-        walkTimer.current = window.setTimeout(
-          runNext,
-          isDiagonal(pathRef.current[0]) ? DIAG_MS : WALK_MS,
-        );
-      };
-      walkTimer.current = window.setTimeout(runNext, isDiagonal(steps[0]) ? DIAG_MS : WALK_MS);
     },
-    [dispatch, stopWalking],
+    [stopWalking],
   );
 
   useEffect(() => {
@@ -283,10 +263,13 @@ export default function WorldView() {
     let lastFxId = stateRef.current.fx.reduce((m, f) => Math.max(m, f.id), 0);
 
     // camera state
-    const cam = { yaw: 0.2, pitch: 0.95, dist: 13 };
+    const cam = camRef.current;
     const focus = player.position.clone();
     const keys = new Set<string>();
     let dragging = false;
+    let dragButton = -1;
+    let dragAccum = 0;
+    let suppressClick = false;
     let lastMouse: { x: number; y: number } | null = null;
     let dragLast = { x: 0, y: 0 };
 
@@ -336,6 +319,10 @@ export default function WorldView() {
 
     const onClick = (e: MouseEvent) => {
       if (e.button !== 0) return;
+      if (suppressClick) {
+        suppressClick = false; // this click was a camera drag
+        return;
+      }
       const st = stateRef.current;
       if (st.activity?.type === 'combat') return;
       const hit = pick(e.clientX, e.clientY);
@@ -396,37 +383,53 @@ export default function WorldView() {
     }
 
     const onMouseMove = (e: MouseEvent) => {
-      if (dragging) {
-        cam.yaw -= (e.clientX - dragLast.x) * 0.008;
-        cam.pitch = Math.min(1.3, Math.max(0.45, cam.pitch + (e.clientY - dragLast.y) * 0.005));
+      if (dragButton >= 0) {
+        const dx = e.clientX - dragLast.x;
+        const dy = e.clientY - dragLast.y;
         dragLast = { x: e.clientX, y: e.clientY };
-        return;
+        if (!dragging) {
+          // left button only becomes a camera drag after a little travel,
+          // so plain clicks still walk/interact
+          dragAccum += Math.abs(dx) + Math.abs(dy);
+          if (dragAccum > 6) dragging = true;
+        }
+        if (dragging) {
+          cam.yaw -= dx * 0.008;
+          cam.pitch = Math.min(1.35, Math.max(0.35, cam.pitch + dy * 0.005));
+          return;
+        }
       }
       lastMouse = { x: e.clientX, y: e.clientY };
     };
     const onPointerDown = (e: MouseEvent) => {
-      if (e.button === 1 || e.button === 2) {
-        dragging = true;
-        dragLast = { x: e.clientX, y: e.clientY };
-      }
+      if (e.button > 2) return;
+      dragButton = e.button;
+      dragAccum = 0;
+      dragging = e.button !== 0; // middle/right rotate immediately, left needs travel
+      dragLast = { x: e.clientX, y: e.clientY };
     };
-    const onPointerUp = () => (dragging = false);
+    const onPointerUp = () => {
+      if (dragging && dragButton === 0) suppressClick = true;
+      dragging = false;
+      dragButton = -1;
+    };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       cam.dist = Math.min(24, Math.max(6, cam.dist * (1 + e.deltaY * 0.001)));
     };
     const onContext = (e: Event) => e.preventDefault();
 
+    // WASD walks; arrow keys are the camera, RS-style
     const KEYMAP: Record<string, [number, number]> = {
       w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
-      ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
     };
-    let moveAccum = 0;
+    const CAM_KEYS = new Set(['q', 'e', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    let lastKeyStep = 0;
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (KEYMAP[k] || k === 'q' || k === 'e') {
+      if (KEYMAP[k] || CAM_KEYS.has(k)) {
         e.preventDefault();
         if (KEYMAP[k]) stopWalking();
         keys.add(k);
@@ -445,6 +448,21 @@ export default function WorldView() {
     renderer.domElement.addEventListener('contextmenu', onContext);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+
+    // Hidden tabs suspend requestAnimationFrame entirely — keep consuming path
+    // steps on a timer so click-to-walk still finishes while backgrounded.
+    const hiddenWalker = window.setInterval(() => {
+      if (!document.hidden) return;
+      if (pathRef.current.length > 0) {
+        const step = pathRef.current.shift()!;
+        dispatch({ type: 'MOVE_STEP', dx: step[0], dy: step[1] });
+      }
+      if (pathRef.current.length === 0 && pendingRef.current) {
+        const act = pendingRef.current;
+        pendingRef.current = null;
+        act();
+      }
+    }, 350);
 
     const resize = () => {
       const w = container.clientWidth;
@@ -471,8 +489,26 @@ export default function WorldView() {
       const st = stateRef.current;
 
       // keyboard movement, rotated to face the camera
-      {
-        // combine held keys so W+D walks the diagonal, rotated to the camera
+      // camera keys: Q/E or ←/→ orbit, ↑/↓ tilt
+      if (keys.has('q') || keys.has('ArrowLeft')) cam.yaw += dt * 2.0;
+      if (keys.has('e') || keys.has('ArrowRight')) cam.yaw -= dt * 2.0;
+      if (keys.has('ArrowUp')) cam.pitch = Math.min(1.35, cam.pitch + dt * 1.2);
+      if (keys.has('ArrowDown')) cam.pitch = Math.max(0.35, cam.pitch - dt * 1.2);
+
+      // player: constant-speed glide; the next step fires just before arrival
+      const target = tilePos(st.world.px, st.world.py);
+      const distToTile = player.position.distanceTo(target);
+      if (pathRef.current.length > 0 && distToTile < STEP_TRIGGER) {
+        const step = pathRef.current.shift()!;
+        dispatch({ type: 'MOVE_STEP', dx: step[0], dy: step[1] });
+      }
+      if (pathRef.current.length === 0 && pendingRef.current && distToTile < 0.35) {
+        const act = pendingRef.current;
+        pendingRef.current = null;
+        act();
+      }
+      // held WASD keys walk continuously, rotated to the camera (W+D = diagonal)
+      if (distToTile < STEP_TRIGGER && now - lastKeyStep > 90) {
         let kdx = 0;
         let kdy = 0;
         for (const k of keys) {
@@ -484,23 +520,12 @@ export default function WorldView() {
         kdx = Math.sign(kdx);
         kdy = Math.sign(kdy);
         if (kdx !== 0 || kdy !== 0) {
-          moveAccum += dt;
-          const stepMs = kdx !== 0 && kdy !== 0 ? DIAG_MS : WALK_MS;
-          if (moveAccum >= stepMs / 1000) {
-            moveAccum = 0;
-            const quad = ((Math.round(cam.yaw / (Math.PI / 2)) % 4) + 4) % 4;
-            for (let i = 0; i < quad; i++) [kdx, kdy] = [kdy, -kdx];
-            dispatch({ type: 'MOVE_STEP', dx: kdx, dy: kdy });
-          }
-        } else {
-          moveAccum = WALK_MS / 1000;
+          lastKeyStep = now;
+          const quad = ((Math.round(cam.yaw / (Math.PI / 2)) % 4) + 4) % 4;
+          for (let i = 0; i < quad; i++) [kdx, kdy] = [kdy, -kdx];
+          dispatch({ type: 'MOVE_STEP', dx: kdx, dy: kdy });
         }
       }
-      if (keys.has('q')) cam.yaw += dt * 1.8;
-      if (keys.has('e')) cam.yaw -= dt * 1.8;
-
-      // player: constant-speed glide toward the logical tile
-      const target = tilePos(st.world.px, st.world.py);
       const remaining = moveTowards(player, target, PLAYER_SPEED, dt);
       const working =
         st.activity?.type === 'gather' || st.activity?.type === 'thieve' || st.activity?.type === 'craft';
@@ -644,6 +669,7 @@ export default function WorldView() {
 
     return () => {
       cancelAnimationFrame(raf);
+      window.clearInterval(hiddenWalker);
       ro.disconnect();
       renderer.domElement.removeEventListener('click', onClick);
       renderer.domElement.removeEventListener('mousemove', onMouseMove);
@@ -664,6 +690,17 @@ export default function WorldView() {
     <div className="world-wrap" ref={containerRef}>
       <div className="zone-label">{zoneName(s.world.px, s.world.py)}</div>
       {hover && <div className="hover-chip">{hover}</div>}
+      <button
+        className="compass-btn"
+        title="Reset camera — drag, arrow keys or Q/E to rotate, scroll to zoom"
+        onClick={() => {
+          camRef.current.yaw = 0.2;
+          camRef.current.pitch = 0.95;
+          camRef.current.dist = 13;
+        }}
+      >
+        🧭
+      </button>
       {s.activity && s.activity.type !== 'combat' && (
         <button className="activity-chip" onClick={() => dispatch({ type: 'STOP' })} title="Click to stop">
           {activityLabel(s)}
