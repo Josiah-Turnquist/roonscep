@@ -286,16 +286,27 @@ export default function WorldView() {
     let dragAccum = 0;
     let suppressClick = false;
     let lastMouse: { x: number; y: number } | null = null;
+    let lastHoverAt = 0;
     let dragLast = { x: 0, y: 0 };
 
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
 
-    function pick(clientX: number, clientY: number): { kind: string; [k: string]: unknown } | null {
+    // includeTerrain runs the ray against the 69k-triangle ground mesh (three
+    // has no BVH, it brute-forces every triangle) — fine for a click, far too
+    // expensive to do per frame for hover.
+    function pick(
+      clientX: number,
+      clientY: number,
+      includeTerrain = true,
+    ): { kind: string; [k: string]: unknown } | null {
       const rect = renderer.domElement.getBoundingClientRect();
       ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
-      const hits = raycaster.intersectObjects(world.pickables, true);
+      const hits = raycaster.intersectObjects(
+        includeTerrain ? world.pickables : [world.interactables],
+        true,
+      );
       for (const h of hits) {
         let o: THREE.Object3D | null = h.object;
         while (o && !o.userData?.kind) o = o.parent;
@@ -499,6 +510,8 @@ export default function WorldView() {
       raf = requestAnimationFrame(animate);
       const now = performance.now();
       const dt = Math.min(0.1, (now - prev) / 1000);
+      // movement uses a tighter clamp so a dropped frame can never teleport the model
+      const mdt = Math.min(dt, 0.034);
       prev = now;
       const t = now / 1000;
       const st = stateRef.current;
@@ -541,7 +554,7 @@ export default function WorldView() {
           dispatch({ type: 'MOVE_STEP', dx: kdx, dy: kdy });
         }
       }
-      const remaining = moveTowards(player, target, PLAYER_SPEED, dt);
+      const remaining = moveTowards(player, target, PLAYER_SPEED, mdt);
       const working =
         st.activity?.type === 'gather' || st.activity?.type === 'thieve' || st.activity?.type === 'craft';
       playerMoving += (Math.min(1, remaining * 6) - playerMoving) * Math.min(1, dt * 10);
@@ -555,7 +568,7 @@ export default function WorldView() {
       }
 
       // camera follows
-      focus.lerp(target, Math.min(1, dt * 5));
+      focus.lerp(player.position, Math.min(1, mdt * 6));
       const cp = Math.cos(cam.pitch);
       camera.position.set(
         focus.x + Math.sin(cam.yaw) * cp * cam.dist,
@@ -751,9 +764,10 @@ export default function WorldView() {
         if (adx * adx + ady * ady < 2500) a.tick(t);
       }
 
-      // hover hint
-      if (lastMouse && !dragging) {
-        const hit = pick(lastMouse.x, lastMouse.y);
+      // hover hint — throttled, and without the terrain mesh in the ray
+      if (lastMouse && !dragging && now - lastHoverAt > 120) {
+        lastHoverAt = now;
+        const hit = pick(lastMouse.x, lastMouse.y, false);
         const label = hit && hit.kind !== 'terrain' ? ((hit.label as string) ?? null) : null;
         renderer.domElement.style.cursor = label ? 'pointer' : 'default';
         if (label !== hoverRef.current) {

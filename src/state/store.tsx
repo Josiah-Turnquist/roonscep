@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useReducer } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useRef } from 'react';
 import {
   AttackStyle, EquipSlot, GameState, LogKind, Monster, Settings, SkillId, StatKey, WorldState,
 } from '../game/types';
@@ -640,26 +640,6 @@ function reduceInner(state: GameState, action: Action): GameState {
       return s;
     }
 
-    case 'MOVE_STEP': {
-      if (s.activity?.type === 'combat') return state;
-      if (s.stunnedTicks > 0) return state;
-      const nx = s.world.px + action.dx;
-      const ny = s.world.py + action.dy;
-      if (!isWalkable(nx, ny)) return state;
-      // no cutting corners: a diagonal step needs both adjacent cardinals open
-      if (
-        action.dx !== 0 &&
-        action.dy !== 0 &&
-        (!isWalkable(s.world.px + action.dx, s.world.py) || !isWalkable(s.world.px, s.world.py + action.dy))
-      ) {
-        return state;
-      }
-      s.world.px = nx;
-      s.world.py = ny;
-      if (s.activity) s.activity = null; // moving interrupts work
-      return s;
-    }
-
     case 'START_GATHER_NODE': {
       const key = `${action.x},${action.y}`;
       const cfg = RESOURCE_BY_CHAR[tileAt(action.x, action.y)];
@@ -947,6 +927,29 @@ function reduceInner(state: GameState, action: Action): GameState {
 }
 
 function reduce(state: GameState, action: Action): GameState {
+  // Walking fires several times a second from inside the render loop, so it
+  // gets a hand-built fast path: shallow update only — no structuredClone of
+  // 90 entities and the log, and no achievement sweep (position can't earn one).
+  if (action.type === 'MOVE_STEP') {
+    if (state.activity?.type === 'combat' || state.stunnedTicks > 0) return state;
+    const nx = state.world.px + action.dx;
+    const ny = state.world.py + action.dy;
+    if (!isWalkable(nx, ny)) return state;
+    // no cutting corners: a diagonal step needs both adjacent cardinals open
+    if (
+      action.dx !== 0 &&
+      action.dy !== 0 &&
+      (!isWalkable(state.world.px + action.dx, state.world.py) ||
+        !isWalkable(state.world.px, state.world.py + action.dy))
+    ) {
+      return state;
+    }
+    return {
+      ...state,
+      activity: null, // moving interrupts work
+      world: { ...state.world, px: nx, py: ny },
+    };
+  }
   const out = reduceInner(state, action);
   return out === state ? state : withAchievements(out);
 }
@@ -958,6 +961,9 @@ const DispatchCtx = createContext<React.Dispatch<Action>>(() => {});
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reduce, undefined, loadState);
+  const latestState = useRef(state);
+  latestState.current = state;
+  const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
     tickClock.last = Date.now();
@@ -968,9 +974,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
+  // Saving stringifies the whole state and hits disk synchronously — far too
+  // heavy to run on every walk step. Throttle it, and flush when the tab
+  // hides or closes so nothing is ever lost.
   useEffect(() => {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
+    if (saveTimer.current !== null) return;
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ ...latestState.current, savedAt: Date.now() }));
+    }, 1500);
   }, [state]);
+
+  useEffect(() => {
+    const flush = () =>
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ ...latestState.current, savedAt: Date.now() }));
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, []);
 
   return (
     <StateCtx.Provider value={state}>
