@@ -59,6 +59,15 @@ function buildMap(): string[][] {
       }
     }
   };
+  /** Fill a rect with feathered, ragged edges so biomes read as natural. */
+  const organic = (x: number, y: number, w: number, h: number, c: string, feather = 5) => {
+    for (let j = y; j < y + h; j++) {
+      for (let i = x; i < x + w; i++) {
+        const d = Math.min(i - x, x + w - 1 - i, j - y, y + h - 1 - j);
+        if (d >= feather || hash01(i * 3 + 7, j * 5 + 11) < (d + 1) / (feather + 1)) set(i, j, c);
+      }
+    }
+  };
   /** Lay road over natural terrain without carving through water or walls. */
   const road = (x: number, y: number) => {
     if ('.;:_*'.includes(g[y]?.[x] ?? '#')) set(x, y, ',');
@@ -84,18 +93,22 @@ function buildMap(): string[][] {
   // ——— the sea & the North Shore ———
   fill(1, 1, MAP_W - 2, 12, '~');
   fill(1, 13, MAP_W - 2, 3, ';');
+  organic(1, 15, MAP_W - 2, 4, ';', 3); // the beach fades raggedly into grass
 
   // ——— the Frozen Reach (NE quarter, swallows its stretch of coast) ———
-  fill(150, 1, 88, 40, '*');
+  organic(148, 1, 90, 42, '*', 7);
   fill(188, 4, 34, 7, '~'); // the ice bay
   set(196, 11, 'x'); set(214, 11, 'x');
   set(204, 11, 'w'); set(220, 8, 'w');
-  set(156, 18, 'Y'); set(164, 30, 'Y');
+  set(156, 18, 'Y'); set(164, 30, 'Y'); set(178, 24, 'Y'); set(158, 34, 'Y');
   set(216, 14, 'F'); // Frostfang's lair, on the bay's south shore
 
   // ——— Willowmere Lake & the Selwick River ———
   disc(38, 38, 15, '~');
   disc(52, 32, 9, '~');
+  disc(28, 46, 8, '~');
+  disc(47, 45, 6, '~');
+  disc(30, 27, 7, '~');
   fill(60, 14, 4, 20, '~'); // the river runs north to the sea
   fill(56, 30, 8, 6, '~'); // joining the lake
   // fishing waters
@@ -131,17 +144,19 @@ function buildMap(): string[][] {
   vRoad(90, 106, 88); // Havenbrook → the swamp
   vRoad(94, 100, 150); // castle approach
 
-  // ——— Westwood & the Elder Grove ———
-  scatter('T', 6, 52, 40, 46, 14, 11);
-  scatter('O', 8, 56, 36, 40, 8, 12);
-  scatter('Y', 6, 80, 30, 20, 5, 13);
-  scatter('q', 40, 56, 12, 36, 4, 14);
-  set(12, 108, 'G'); set(20, 116, 'G'); set(28, 110, 'G');
-  set(16, 106, 'o'); set(24, 120, 'o'); set(10, 118, 'o');
+  // ——— Westwood & the Elder Grove: an actual forest ———
+  scatter('T', 6, 52, 40, 46, 90, 11);
+  scatter('O', 8, 56, 36, 40, 40, 12);
+  scatter('Y', 6, 80, 30, 20, 12, 13);
+  scatter('q', 40, 56, 12, 36, 6, 14);
+  scatter('T', 8, 102, 28, 26, 26, 33); // the grove's outer woods
+  set(12, 108, 'G'); set(20, 116, 'G'); set(28, 110, 'G'); set(16, 122, 'G'); set(24, 106, 'G');
+  set(16, 106, 'o'); set(24, 120, 'o'); set(10, 118, 'o'); set(30, 114, 'o');
 
   // ——— the North Pass ———
-  scatter('P', 60, 32, 40, 22, 8, 15);
-  scatter('h', 58, 34, 44, 22, 6, 16);
+  scatter('P', 60, 32, 40, 22, 28, 15);
+  scatter('h', 58, 34, 44, 22, 22, 16);
+  scatter('T', 66, 36, 32, 18, 14, 34);
 
   // ——— Havenbrook ———
   fill(84, 70, 12, 9, ','); // the town square
@@ -155,32 +170,34 @@ function buildMap(): string[][] {
   set(90, 74, '#'); // the town well
 
   // ——— fields south of town ———
-  scatter('b', 76, 92, 28, 10, 4, 17);
-  scatter('z', 76, 92, 28, 10, 4, 18);
+  scatter('b', 76, 92, 28, 10, 6, 17);
+  scatter('z', 76, 92, 28, 10, 6, 18);
 
   // ——— Greenfields & Copperhill ———
-  scatter('T', 110, 52, 56, 40, 6, 19);
-  scatter('1', 130, 74, 22, 16, 5, 20);
-  scatter('2', 130, 74, 22, 16, 5, 21);
-  scatter('8', 132, 66, 18, 7, 3, 22);
+  scatter('T', 110, 52, 56, 40, 34, 19);
+  scatter('h', 104, 44, 40, 12, 6, 35);
+  scatter('b', 112, 84, 30, 12, 3, 36);
+  scatter('1', 130, 74, 22, 16, 7, 20);
+  scatter('2', 130, 74, 22, 16, 7, 21);
+  scatter('8', 132, 66, 18, 7, 4, 22);
 
   // ——— Darkspine Mountains: richer ore the deeper you climb ———
-  fill(172, 42, 66, 64, ':');
+  organic(170, 42, 68, 64, ':', 6);
   fill(188, 50, 2, 20, '#');
   fill(204, 70, 2, 24, '#');
   fill(214, 48, 2, 18, '#');
   fill(196, 88, 2, 14, '#');
-  scatter('3', 174, 46, 18, 34, 6, 23, ':');
-  scatter('4', 180, 48, 22, 36, 6, 24, ':');
-  scatter('5', 196, 52, 14, 32, 4, 25, ':');
-  scatter('6', 210, 54, 12, 30, 3, 26, ':');
-  set(224, 66, '7'); set(228, 88, '7');
+  scatter('3', 174, 46, 18, 34, 9, 23, ':');
+  scatter('4', 180, 48, 22, 36, 9, 24, ':');
+  scatter('5', 196, 52, 14, 32, 6, 25, ':');
+  scatter('6', 210, 54, 12, 30, 4, 26, ':');
+  set(224, 66, '7'); set(228, 88, '7'); set(232, 76, '7');
 
   // ——— Duskmire Swamp & the Sunken Crypt ———
-  fill(42, 104, 84, 36, '_');
-  scatter('d', 46, 106, 76, 30, 5, 27, '_');
-  scatter('e', 60, 112, 60, 26, 4, 28, '_');
-  scatter('n', 80, 118, 44, 20, 4, 29, '_');
+  organic(40, 102, 88, 40, '_', 6);
+  scatter('d', 46, 106, 76, 30, 8, 27, '_');
+  scatter('e', 60, 112, 60, 26, 6, 28, '_');
+  scatter('n', 80, 118, 44, 20, 6, 29, '_');
   fill(54, 116, 20, 18, '#');
   fill(56, 118, 16, 14, '_');
   set(63, 116, '_'); set(64, 116, '_'); // the crypt mouth
@@ -193,11 +210,11 @@ function buildMap(): string[][] {
   set(168, 112, 'X'); // the Fallen King's throne
 
   // ——— Emberdeep ———
-  fill(178, 112, 60, 30, '%');
+  organic(176, 110, 62, 32, '%', 5);
   set(226, 132, 'E'); // Embermaw's forge-heart
 
   // ——— the Void Rift ———
-  fill(120, 132, 26, 10, '!');
+  organic(119, 131, 28, 12, '!', 3);
   set(122, 134, 'v'); set(134, 133, 'v'); set(143, 136, 'v');
   set(128, 136, 'V'); // Voidheart
   set(140, 138, 'N'); // Nethrax

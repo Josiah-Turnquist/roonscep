@@ -468,6 +468,56 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
   scene.add(interactables);
   scene.add(overlay);
 
+  // ——— decorative filler: pure scenery, instanced per type, never clickable ———
+  // (not in pickables, so clicks and hovers pass straight through)
+  const DECOR: { chars: string; density: number; geo: THREE.BufferGeometry; color: number; yOff: number }[] = [
+    { chars: '.', density: 0.09, geo: new THREE.ConeGeometry(0.07, 0.22, 5), color: 0x3a6b28, yOff: 0.1 }, // grass tufts
+    { chars: '.', density: 0.012, geo: new THREE.ConeGeometry(0.16, 0.34, 6), color: 0x2f5a22, yOff: 0.16 }, // ferns
+    { chars: '.', density: 0.008, geo: new THREE.SphereGeometry(0.05, 6, 5), color: 0xe8e0d0, yOff: 0.06 }, // white flowers
+    { chars: '.', density: 0.006, geo: new THREE.SphereGeometry(0.05, 6, 5), color: 0xd9ab4f, yOff: 0.06 }, // gold flowers
+    { chars: '.:;', density: 0.012, geo: new THREE.IcosahedronGeometry(0.09, 0), color: 0x8a8378, yOff: 0.05 }, // pebbles
+    { chars: '*', density: 0.02, geo: new THREE.ConeGeometry(0.3, 1.0, 6), color: 0x4a6b52, yOff: 0.5 }, // snow pines
+    { chars: '*', density: 0.012, geo: new THREE.IcosahedronGeometry(0.16, 0), color: 0xeef2f5, yOff: 0.08 }, // ice boulders
+    { chars: '_', density: 0.03, geo: new THREE.CylinderGeometry(0.015, 0.022, 0.6, 4), color: 0x5a6b4a, yOff: 0.3 }, // reeds
+    { chars: '_', density: 0.008, geo: new THREE.CylinderGeometry(0.04, 0.1, 1.0, 5), color: 0x3a352c, yOff: 0.5 }, // dead snags
+    { chars: '%', density: 0.02, geo: new THREE.IcosahedronGeometry(0.18, 0), color: 0x2b1e1a, yOff: 0.1 }, // basalt rocks
+    { chars: '!', density: 0.02, geo: new THREE.OctahedronGeometry(0.12, 0), color: 0x4a3a70, yOff: 0.1 }, // void shards
+  ];
+  const m4d = new THREE.Matrix4();
+  const qd = new THREE.Quaternion();
+  const ed = new THREE.Euler();
+  const vp = new THREE.Vector3();
+  const vs = new THREE.Vector3();
+  DECOR.forEach((spec, si) => {
+    const mats: THREE.Matrix4[] = [];
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!spec.chars.includes(MAP[y][x])) continue;
+        if (hash(x * 17 + si * 101, y * 23 + si * 57) >= spec.density) continue;
+        const jx = (hash(x + si, y) - 0.5) * 0.7;
+        const jz = (hash(x, y + si) - 0.5) * 0.7;
+        const sc = 0.7 + hash(x * 2 + si, y * 3) * 0.7;
+        ed.set(0, hash(x, y * 7 + si) * Math.PI * 2, 0);
+        qd.setFromEuler(ed);
+        vp.set(x + 0.5 + jx, groundHeight(x, y) + spec.yOff * sc, y + 0.5 + jz);
+        vs.set(sc, sc, sc);
+        mats.push(m4d.compose(vp, qd, vs).clone());
+      }
+    }
+    if (mats.length === 0) return;
+    const imesh = new THREE.InstancedMesh(
+      spec.geo,
+      new THREE.MeshLambertMaterial({ color: spec.color }),
+      mats.length,
+    );
+    mats.forEach((mm, i) => imesh.setMatrixAt(i, mm));
+    imesh.instanceMatrix.needsUpdate = true;
+    imesh.receiveShadow = true;
+    imesh.matrixAutoUpdate = false;
+    imesh.updateMatrix();
+    scene.add(imesh);
+  });
+
   // The world is static: freeze every matrix so three.js stops recomposing
   // thousands of unchanged transforms per frame. Animated subtrees are
   // re-enabled and are only ticked near the player (see WorldView).
