@@ -2,11 +2,27 @@
 // spiders, ghosts, dragons and orbs — no emoji, no chess pieces.
 import * as THREE from 'three';
 import { NpcDef } from '../../game/world';
+import { EquipSlot } from '../../game/types';
+import { ITEMS } from '../../game/items';
+
+export interface HumanoidParts {
+  body: THREE.Group;
+  torso: THREE.Mesh;
+  skirt: THREE.Mesh | null;
+  lArm: THREE.Mesh;
+  rArm: THREE.Mesh;
+  headY: number;
+}
 
 export interface CharModel {
   group: THREE.Group;
   /** Drive per-frame animation. moving: 0..1, working: gathering/crafting swing. */
   update: (dt: number, t: number, moving: number, working: boolean) => void;
+  parts?: HumanoidParts;
+}
+
+export interface PlayerModel extends CharModel {
+  setEquipment: (eq: Partial<Record<EquipSlot, string>>) => void;
 }
 
 const matCache = new Map<string, THREE.MeshLambertMaterial>();
@@ -93,8 +109,9 @@ export function buildHumanoid(o: HumanoidOpts): CharModel {
   rLeg.position.set(0.09, hipY, 0);
   const body = new THREE.Group();
 
+  let skirt: THREE.Mesh | null = null;
   if (o.robe) {
-    const skirt = cone(0.3, 0.55, o.tunic);
+    skirt = cone(0.3, 0.55, o.tunic);
     skirt.position.y = 0.28;
     g.add(skirt);
   } else {
@@ -231,7 +248,7 @@ export function buildHumanoid(o: HumanoidOpts): CharModel {
     body.rotation.z = Math.sin(t * 1.3) * 0.02 * idle;
   };
 
-  return { group: g, update };
+  return { group: g, update, parts: { body, torso, skirt, lArm, rArm, headY } };
 }
 
 // ——— animals ———
@@ -646,16 +663,83 @@ export function buildNpcModel(npc: NpcDef): CharModel {
   return buildHumanoid(NPC_STYLES[npc.id] ?? { skin: SKIN, tunic: 0x666666 });
 }
 
-/** The player: a proper robed wizard with a staff. */
-export function buildPlayerModel(): CharModel {
+// ——— equipment display: one model per slot, tinted by tier ———
+
+const TIER_PREFIX_COLORS: [string, number][] = [
+  ['bronze_', 0xb87333],
+  ['iron_', 0x9aa0aa],
+  ['steel_', 0xccd2da],
+  ['mithril_', 0x5a79d6],
+  ['adamant_', 0x4f9e3c],
+  ['rune_', 0x59d1e0],
+  ['leather_', 0x8a6a42],
+  ['dragonhide_', 0x3f7a2d],
+  ['mystic_', 0x8a5fd0],
+];
+
+const SPECIAL_COLORS: Record<string, number> = {
+  wooden_shield: 0x8a6a42,
+  apprentice_staff: 0x8a6a42, adept_staff: 0x6a3a9c, master_staff: 0x3a2a70, void_staff: 0x2a2040,
+  shortbow: 0xa8845a, oak_shortbow: 0x7a5a30, willow_shortbow: 0x5a9c7a,
+  maple_shortbow: 0xc96f2e, yew_shortbow: 0x234d20, magic_shortbow: 0x7b4fc4, soulbow: 0xd0343f,
+  bone_crusher: 0xd8d2c0, obsidian_blade: 0x2b2b33, kings_greatsword: 0xe8b64c,
+  abyssal_lash: 0x2f4a4f, soul_reaver: 0x8a5fd0,
+  molten_shield: 0xff6a2a, wyrm_scale_shield: 0x8fd4ff,
+  crown_of_kings: 0xe8b64c,
+  silver_amulet: 0xe8e8f0, sapphire_amulet: 0x4a6fd6, emerald_amulet: 0x2fbf4f,
+  ruby_amulet: 0xd0343f, diamond_amulet: 0xf0f0f8, frost_amulet: 0x8fd4ff, void_amulet: 0x8a5fd0,
+  slayer_cape: 0x2b2b30,
+};
+
+export function tierColor(itemId: string): number {
+  if (SPECIAL_COLORS[itemId] !== undefined) return SPECIAL_COLORS[itemId];
+  for (const [prefix, color] of TIER_PREFIX_COLORS) {
+    if (itemId.startsWith(prefix)) return color;
+  }
+  if (itemId.endsWith('_cape')) return 0xd9ab4f; // skill capes
+  return 0x9a9aa2;
+}
+
+function heldWeapon(style: 'melee' | 'ranged' | 'magic', color: number): THREE.Group {
+  const g = new THREE.Group();
+  if (style === 'magic') {
+    const shaft = cyl(0.025, 0.03, 0.95, 0x5c4430);
+    shaft.position.y = -0.05;
+    g.add(shaft);
+    const orb = sphere(0.06, color, { emissive: color, ei: 0.8 });
+    orb.position.y = 0.44;
+    g.add(orb);
+  } else if (style === 'ranged') {
+    const bow = new THREE.Mesh(
+      new THREE.TorusGeometry(0.3, 0.022, 6, 14, Math.PI),
+      mat(color),
+    );
+    bow.castShadow = true;
+    bow.rotation.z = Math.PI / 2;
+    g.add(bow);
+  } else {
+    const blade = box(0.05, 0.5, 0.016, color, { emissive: color, ei: 0.12 });
+    blade.position.y = -0.33;
+    g.add(blade);
+    const guard = box(0.16, 0.035, 0.05, 0x6a6158);
+    guard.position.y = -0.07;
+    g.add(guard);
+    const grip = cyl(0.02, 0.022, 0.12, 0x4a3320);
+    g.add(grip);
+  }
+  return g;
+}
+
+/** The player: a robed wizard whose wielded gear is visible and tier-tinted. */
+export function buildPlayerModel(): PlayerModel {
+  const DEFAULT_TUNIC = 0x3a4a8c;
   const model = buildHumanoid({
     skin: 0xe0b58a,
-    tunic: 0x3a4a8c,
+    tunic: DEFAULT_TUNIC,
     robe: true,
-    hat: 'wizard',
-    hatColor: 0x2c3a75,
-    staff: 0x5c4430,
+    hat: 'none',
   });
+  const parts = model.parts!;
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.34, 0.42, 24),
     new THREE.MeshBasicMaterial({ color: 0xe8dcc0, transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
@@ -663,5 +747,84 @@ export function buildPlayerModel(): CharModel {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.04;
   model.group.add(ring);
-  return model;
+
+  // give the tintable meshes their own materials so armour colours don't leak
+  // into every other model sharing the cached material
+  parts.torso.material = (parts.torso.material as THREE.MeshLambertMaterial).clone();
+  if (parts.skirt) parts.skirt.material = (parts.skirt.material as THREE.MeshLambertMaterial).clone();
+
+  // the wizard hat, shown only while no helmet is worn
+  const hatC = 0x2c3a75;
+  const hat = new THREE.Group();
+  const brim = cyl(0.2, 0.2, 0.03, hatC);
+  brim.position.y = parts.headY + 0.1;
+  const tip = cone(0.13, 0.3, hatC);
+  tip.position.y = parts.headY + 0.26;
+  hat.add(brim, tip);
+  parts.body.add(hat);
+
+  // attachment points
+  const weaponG = new THREE.Group();
+  weaponG.position.set(0, -0.3, 0.04);
+  parts.rArm.add(weaponG);
+  const shieldG = new THREE.Group();
+  shieldG.position.set(0, -0.22, 0.08);
+  parts.lArm.add(shieldG);
+  const headG = new THREE.Group();
+  parts.body.add(headG);
+  const backG = new THREE.Group();
+  backG.position.set(0, 0.6, -0.15);
+  parts.body.add(backG);
+  const neckG = new THREE.Group();
+  neckG.position.set(0, 0.72, 0.12);
+  parts.body.add(neckG);
+
+  const clear = (grp: THREE.Group) => {
+    for (const child of [...grp.children]) grp.remove(child);
+  };
+
+  const setEquipment = (eq: Partial<Record<EquipSlot, string>>) => {
+    clear(weaponG);
+    clear(shieldG);
+    clear(headG);
+    clear(backG);
+    clear(neckG);
+    if (eq.weapon) {
+      const style = ITEMS[eq.weapon]?.combatStyle ?? 'melee';
+      weaponG.add(heldWeapon(style, tierColor(eq.weapon)));
+    }
+    if (eq.shield) {
+      const plate = box(0.05, 0.34, 0.26, tierColor(eq.shield));
+      const boss = sphere(0.05, 0x6a6158);
+      boss.position.z = 0.14;
+      shieldG.add(plate, boss);
+    }
+    hat.visible = !eq.helmet;
+    if (eq.helmet) {
+      const helm = cyl(0.15, 0.155, 0.13, tierColor(eq.helmet));
+      helm.position.y = parts.headY + 0.06;
+      headG.add(helm);
+    }
+    if (eq.cape) {
+      const cape = box(0.36, 0.5, 0.02, tierColor(eq.cape));
+      cape.position.y = -0.22;
+      cape.rotation.x = 0.1;
+      backG.add(cape);
+    }
+    if (eq.amulet) {
+      const gem = sphere(0.05, tierColor(eq.amulet), { emissive: tierColor(eq.amulet), ei: 0.35 });
+      neckG.add(gem);
+    }
+    (parts.torso.material as THREE.MeshLambertMaterial).color.setHex(
+      eq.body ? tierColor(eq.body) : DEFAULT_TUNIC,
+    );
+    if (parts.skirt) {
+      (parts.skirt.material as THREE.MeshLambertMaterial).color.setHex(
+        eq.legs ? tierColor(eq.legs) : DEFAULT_TUNIC,
+      );
+    }
+  };
+
+  setEquipment({});
+  return { ...model, setEquipment };
 }

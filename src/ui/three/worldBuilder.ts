@@ -12,12 +12,12 @@ import { buildNpcModel } from './models';
 // ——— terrain profile ———
 
 const BASE_HEIGHT: Record<string, number> = {
-  '.': 0, ',': 0.02, ':': 0.55, _: -0.12, '*': 0.3, '%': 0.18, '!': 0.05,
+  '.': 0, ',': 0.02, ';': 0.02, ':': 0.55, _: -0.12, '*': 0.3, '%': 0.18, '!': 0.05,
   '~': -0.55, '#': 0.9, '=': 0.06,
 };
 
 const TILE_COLOR: Record<string, number> = {
-  '.': 0x4a7c33, ',': 0x9c8757, ':': 0x7d715c, _: 0x4c5a3d, '*': 0xdfe8ec,
+  '.': 0x4a7c33, ',': 0x9c8757, ';': 0xd8c78a, ':': 0x7d715c, _: 0x4c5a3d, '*': 0xdfe8ec,
   '%': 0x5a2d20, '!': 0x2a2040, '~': 0x2f5f8a, '#': 0x6a5f4f, '=': 0x8a6a42,
 };
 
@@ -118,6 +118,7 @@ export function makeTextSprite(text: string, color = '#ffe873', height = 0.4): T
 
 const TREE_STYLE: Record<string, { canopy: number; tall: number; trunk: number }> = {
   T: { canopy: 0x3f7a2d, tall: 1.0, trunk: 0x6b4a2f },
+  h: { canopy: 0x8fbf62, tall: 0.95, trunk: 0xd8d2c8 },
   O: { canopy: 0x2f6323, tall: 1.15, trunk: 0x5c3d24 },
   W: { canopy: 0x5a9c7a, tall: 0.95, trunk: 0x6b4a2f },
   P: { canopy: 0xc96f2e, tall: 1.05, trunk: 0x6b4a2f },
@@ -149,7 +150,7 @@ function buildTree(char: string, seed: number): THREE.Group {
 }
 
 const ROCK_TIER: Record<string, number> = {
-  '1': 0xe07b39, '2': 0xd9d9d9, '3': 0x8a5a3b, '4': 0x2b2b2b,
+  '1': 0xe07b39, '2': 0xd9d9d9, '8': 0xe8e8f0, '3': 0x8a5a3b, '4': 0x2b2b2b,
   '5': 0x5a79d6, '6': 0x4f9e3c, '7': 0x59d1e0,
 };
 
@@ -194,7 +195,8 @@ function buildBush(char: string, seed: number): THREE.Group {
 }
 
 const FISH_COLOR: Record<string, number> = {
-  f: 0x9adfff, g: 0x6fc3ff, j: 0xffa07a, l: 0xff7a5c, w: 0x7ae0ff, x: 0xc0d8e8,
+  f: 0x9adfff, a: 0xb8d4e8, c: 0x8fb4d8, g: 0x6fc3ff, j: 0xffa07a, u: 0x7a9c5a,
+  l: 0xff7a5c, w: 0x7ae0ff, x: 0xc0d8e8,
 };
 
 // ——— stations & lairs ———

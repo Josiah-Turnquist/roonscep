@@ -6,8 +6,8 @@ import { levelForXp } from '../game/xp';
 
 const MASTER_LOCATIONS: Record<string, string> = {
   mira: 'Havenbrook square',
-  dorn: 'the Darkspine camp',
-  zyra: 'the mouth of Emberdeep',
+  dorn: 'the Darkspine road camp',
+  zyra: 'the Emberdeep shelf',
 };
 
 export default function SlayerPanel() {

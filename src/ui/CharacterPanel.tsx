@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react';
-import { ACHIEVEMENTS } from '../game/achievements';
+import { ACHIEVEMENTS, MILESTONE_IDS } from '../game/achievements';
 import { useDispatch, useGame, SAVE_KEY } from '../state/store';
 import { StatKey } from '../game/types';
+
+const GENERAL = ACHIEVEMENTS.filter((a) => !MILESTONE_IDS.has(a.id));
+const MILESTONES = ACHIEVEMENTS.filter((a) => MILESTONE_IDS.has(a.id));
 
 const STAT_ROWS: { key: StatKey; label: string; icon: string }[] = [
   { key: 'totalKills', label: 'Monsters slain', icon: '⚔️' },
@@ -62,7 +65,7 @@ export default function CharacterPanel() {
 
       <h3 className="section-title">Achievements</h3>
       <div className="ach-grid">
-        {ACHIEVEMENTS.map((a) => {
+        {GENERAL.map((a) => {
           const earned = s.achievements.includes(a.id);
           return (
             <div key={a.id} className={`ach ${earned ? 'earned' : ''}`} title={a.desc}>
@@ -70,6 +73,23 @@ export default function CharacterPanel() {
               <span className="ach-name">{a.name}</span>
               <span className="ach-desc muted small">{a.desc}</span>
             </div>
+          );
+        })}
+      </div>
+
+      <h3 className="section-title">
+        Skill Milestones{' '}
+        <span className="muted small">
+          ({MILESTONES.filter((a) => s.achievements.includes(a.id)).length}/{MILESTONES.length})
+        </span>
+      </h3>
+      <div className="milestone-grid">
+        {MILESTONES.map((a) => {
+          const earned = s.achievements.includes(a.id);
+          return (
+            <span key={a.id} className={`milestone ${earned ? 'earned' : ''}`} title={a.desc}>
+              {a.icon} {a.name}
+            </span>
           );
         })}
       </div>

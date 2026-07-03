@@ -1,120 +1,206 @@
-// The overworld: a 72×48 tile map built programmatically, plus NPCs, monster
-// spawns, resource nodes, crafting stations and boss lairs placed on it.
+// The overworld: a 240×144 tile realm built programmatically, plus NPCs,
+// monster spawns, resource nodes, crafting stations and boss lairs.
+//
+// Geography, west to east / north to south:
+//   The North Shore & sea — beaches along the whole top edge
+//   Port Selwick — fishing town on the coast, pier, smokehouse, second shop
+//   The Selwick River — flows from Willowmere Lake to the sea, crossed by
+//     Stonebridge on the northern highway
+//   Willowmere Lake & Westwood (NW), Elder Grove (deep SW)
+//   Havenbrook — the starting town, center-west, at the crossroads
+//   Greenfields & Copperhill — pastures and starter mining east of town
+//   The North Pass — maple and birch woods between town and the coast
+//   The Frozen Reach — snowfields and an ice bay, NE quarter
+//   Darkspine Mountains — eastern range; ore grows richer the deeper you go
+//   Duskmire Swamp & the Sunken Crypt — the rotten south
+//   The Ruined Castle — south-east, the Fallen King's seat
+//   Emberdeep — volcanic far SE; The Void Rift — a scar in the far south
 
-export const MAP_W = 72;
-export const MAP_H = 48;
+export const MAP_W = 240;
+export const MAP_H = 144;
 
 // ——— tile legend ———
-// terrain: . grass  , path  : rocky ground  _ swamp  * snow  % emberdeep  ! void  ~ water  # wall  = wood floor
-// trees:   T tree  O oak  W willow  P maple  Y yew  G magic
-// rocks:   1 copper  2 tin  3 iron  4 coal  5 mithril  6 adamantite  7 runite
-// fish:    f shrimp  g trout  j salmon  l lobster  w swordfish  x shark
+// terrain: . grass  , road  ; sand  : rocky  _ swamp  * snow  % ember  ! void  ~ water  # wall  = wood floor/bridge
+// trees:   T tree  h birch  O oak  W willow  P maple  Y yew  G magic
+// rocks:   1 copper  2 tin  8 silver  3 iron  4 coal  5 mithril  6 adamantite  7 runite
+// fish:    f shrimp  a sardine  c herring  g trout  j salmon  u pike  l lobster  w swordfish  x shark
 // forage:  b berries  z flax  q sunleaf  d mossbloom  e dragonwort  n duskthorn  o golden apple  v voidcap
 // stations: U furnace  A anvil  R range
 // lairs:   K korgath  E embermaw  F frostfang  X fallen king  V voidheart  N nethrax
 
-const WALKABLE = new Set(['.', ',', ':', '_', '*', '%', '!', '=']);
+const WALKABLE = new Set(['.', ',', ';', ':', '_', '*', '%', '!', '=']);
 
 function buildMap(): string[][] {
   const g: string[][] = Array.from({ length: MAP_H }, () => Array(MAP_W).fill('.'));
   const set = (x: number, y: number, c: string) => {
-    if (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) g[y][x] = c;
+    if (x >= 1 && x < MAP_W - 1 && y >= 1 && y < MAP_H - 1) g[y][x] = c;
   };
   const fill = (x: number, y: number, w: number, h: number, c: string) => {
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) set(i, j, c);
   };
+  const disc = (cx: number, cy: number, r: number, c: string) => {
+    for (let j = cy - r; j <= cy + r; j++)
+      for (let i = cx - r; i <= cx + r; i++)
+        if ((i - cx) * (i - cx) + (j - cy) * (j - cy) <= r * r) set(i, j, c);
+  };
+  const hash01 = (a: number, b: number) => {
+    const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  /** Deterministically scatter n of char inside a rect, only on `on` tiles. */
+  const scatter = (c: string, x: number, y: number, w: number, h: number, n: number, seed: number, on = '.') => {
+    let placed = 0;
+    for (let k = 0; placed < n && k < n * 40; k++) {
+      const i = x + Math.floor(hash01(seed, k) * w);
+      const j = y + Math.floor(hash01(seed * 7 + 3, k * 5 + 1) * h);
+      if (g[j]?.[i] === on) {
+        set(i, j, c);
+        placed++;
+      }
+    }
+  };
+  /** Lay road over natural terrain without carving through water or walls. */
+  const road = (x: number, y: number) => {
+    if ('.;:_*'.includes(g[y]?.[x] ?? '#')) set(x, y, ',');
+  };
+  const hRoad = (x1: number, x2: number, y: number) => {
+    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) road(x, y);
+  };
+  const vRoad = (y1: number, y2: number, x: number) => {
+    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) road(x, y);
+  };
+  const building = (x: number, y: number, w: number, h: number, doorX: number, doorY: number) => {
+    fill(x, y, w, h, '#');
+    fill(x + 1, y + 1, w - 2, h - 2, '=');
+    set(doorX, doorY, '=');
+  };
 
-  // Border cliffs
+  // ——— border cliffs ———
   fill(0, 0, MAP_W, 1, '#');
   fill(0, MAP_H - 1, MAP_W, 1, '#');
   fill(0, 0, 1, MAP_H, '#');
   fill(MAP_W - 1, 0, 1, MAP_H, '#');
 
-  // — Willowmere Lake (NW) —
-  fill(3, 2, 24, 8, '~');
-  set(6, 9, 'f'); set(10, 9, 'f');
-  set(16, 9, 'g'); set(20, 9, 'g');
-  set(24, 6, 'j'); set(25, 4, 'j');
-  set(13, 9, 'l');
-  for (const x of [5, 9, 13, 17, 21]) set(x, 11, 'W');
+  // ——— the sea & the North Shore ———
+  fill(1, 1, MAP_W - 2, 12, '~');
+  fill(1, 13, MAP_W - 2, 3, ';');
 
-  // — North Pass maples —
-  set(31, 4, 'P'); set(33, 8, 'P'); set(36, 3, 'P'); set(38, 7, 'P');
+  // ——— the Frozen Reach (NE quarter, swallows its stretch of coast) ———
+  fill(150, 1, 88, 40, '*');
+  fill(188, 4, 34, 7, '~'); // the ice bay
+  set(196, 11, 'x'); set(214, 11, 'x');
+  set(204, 11, 'w'); set(220, 8, 'w');
+  set(156, 18, 'Y'); set(164, 30, 'Y');
+  set(216, 14, 'F'); // Frostfang's lair, on the bay's south shore
 
-  // — The Frozen Reach (NE) —
-  fill(42, 1, 29, 11, '*');
-  fill(58, 1, 10, 3, '~');
-  set(60, 3, 'x'); set(64, 3, 'x');
-  set(62, 3, 'w'); set(66, 3, 'w');
-  set(66, 6, 'F'); // Frostfang's lair
-  set(44, 2, 'Y'); set(52, 10, 'Y');
+  // ——— Willowmere Lake & the Selwick River ———
+  disc(38, 38, 15, '~');
+  disc(52, 32, 9, '~');
+  fill(60, 14, 4, 20, '~'); // the river runs north to the sea
+  fill(56, 30, 8, 6, '~'); // joining the lake
+  // fishing waters
+  set(30, 36, 'f'); set(45, 28, 'f');
+  set(61, 25, 'g'); set(62, 17, 'g'); set(59, 31, 'g');
+  set(44, 46, 'j'); set(28, 44, 'j');
+  set(38, 51, 'u'); set(51, 39, 'u');
+  // willows ring the shore
+  for (const [wx, wy] of [[24, 26], [32, 22], [46, 22], [56, 26], [20, 42], [28, 50], [46, 50]] as const) set(wx, wy, 'W');
 
-  // — Darkspine Mountains (E) —
-  fill(48, 12, 23, 17, ':');
-  // ridge walls for texture / routing
-  for (const [wx, wy] of [[57, 14], [57, 15], [57, 16], [57, 17], [62, 20], [62, 21], [62, 22], [52, 22], [52, 23], [66, 13], [67, 13], [59, 26], [60, 26]] as const) set(wx, wy, '#');
-  set(50, 15, '3'); set(52, 18, '3'); set(50, 21, '3'); set(53, 25, '3');
-  set(55, 16, '4'); set(56, 20, '4'); set(55, 25, '4'); set(58, 13, '4');
-  set(60, 17, '5'); set(61, 22, '5'); set(63, 19, '5');
-  set(65, 16, '6'); set(66, 21, '6');
-  set(68, 24, '7'); set(69, 19, '7');
+  // ——— Stonebridge & the northern highway ———
+  fill(59, 21, 6, 2, '='); // the bridge itself
+  hRoad(44, 58, 22);
+  hRoad(65, 100, 22);
 
-  // — Havenbrook town —
-  fill(8, 19, 21, 1, ','); // main street
-  fill(17, 12, 1, 14, ','); // north-south road
-  fill(29, 19, 19, 1, ','); // east road to the mountains
-  fill(17, 26, 1, 4, ','); // south road into the swamp
-  // General store
-  fill(8, 14, 6, 4, '#'); fill(9, 15, 4, 2, '='); set(11, 17, '=');
-  // Smithy
-  fill(21, 14, 6, 4, '#'); fill(22, 15, 4, 2, '='); set(23, 17, '=');
-  set(22, 15, 'U'); set(25, 15, 'A');
-  // Inn
-  fill(8, 21, 6, 4, '#'); fill(9, 22, 4, 2, '='); set(11, 21, '=');
-  set(9, 22, 'R');
-  // Chapel
-  fill(21, 21, 6, 4, '#'); fill(22, 22, 4, 2, '='); set(23, 21, '=');
+  // ——— Port Selwick ———
+  fill(100, 16, 34, 15, ';'); // the town stands on sand
+  fill(112, 5, 3, 11, '='); // the pier
+  set(111, 8, 'l'); set(116, 10, 'l');
+  set(111, 12, 'w');
+  set(116, 6, 'x');
+  set(105, 12, 'a'); set(96, 12, 'a');
+  set(125, 12, 'c'); set(131, 12, 'c');
+  building(102, 17, 8, 6, 106, 22); // Sella's port store
+  building(120, 17, 8, 6, 124, 22); // the smokehouse
+  set(122, 19, 'R');
+  hRoad(100, 132, 24);
+  vRoad(24, 32, 100);
 
-  // — Fields & Copperhill (around town) —
-  set(12, 26, 'b'); set(14, 27, 'b');
-  set(20, 26, 'z'); set(22, 27, 'z'); set(24, 26, 'z');
-  set(31, 23, '1'); set(33, 25, '1'); set(35, 22, '1');
-  set(32, 24, '2'); set(34, 23, '2'); set(36, 25, '2');
+  // ——— roads: the realm's spine ———
+  vRoad(32, 58, 100); // port → Havenbrook north gate
+  hRoad(48, 172, 74); // Westwood → Havenbrook → Darkspine camp
+  vRoad(90, 106, 88); // Havenbrook → the swamp
+  vRoad(94, 100, 150); // castle approach
 
-  // — Westwood & the Elder Grove (W) —
-  for (const [tx, ty] of [[3, 13], [5, 16], [2, 18], [6, 21], [4, 26], [7, 24], [2, 28], [6, 27]] as const) set(tx, ty, 'T');
-  for (const [tx, ty] of [[4, 17], [6, 13], [3, 21], [5, 25]] as const) set(tx, ty, 'O');
-  set(2, 24, 'Y'); set(5, 29, 'Y');
-  set(3, 32, 'G'); set(5, 33, 'G');
-  set(2, 34, 'o'); set(4, 35, 'o');
-  set(5, 22, 'q'); set(3, 26, 'q'); set(7, 30, 'q');
+  // ——— Westwood & the Elder Grove ———
+  scatter('T', 6, 52, 40, 46, 14, 11);
+  scatter('O', 8, 56, 36, 40, 8, 12);
+  scatter('Y', 6, 80, 30, 20, 5, 13);
+  scatter('q', 40, 56, 12, 36, 4, 14);
+  set(12, 108, 'G'); set(20, 116, 'G'); set(28, 110, 'G');
+  set(16, 106, 'o'); set(24, 120, 'o'); set(10, 118, 'o');
 
-  // — Duskmire Swamp (S) —
-  fill(6, 30, 36, 14, '_');
-  // The Sunken Crypt
-  fill(8, 36, 8, 6, '#'); fill(9, 37, 6, 4, '_'); set(12, 36, '_');
-  set(10, 39, 'K'); // Korgath's lair
-  set(18, 33, 'd'); set(24, 35, 'd'); set(30, 37, 'd'); set(21, 40, 'd');
-  set(19, 38, 'e'); set(26, 41, 'e'); set(34, 39, 'e');
-  set(17, 42, 'n'); set(23, 43, 'n'); set(32, 42, 'n');
+  // ——— the North Pass ———
+  scatter('P', 60, 32, 40, 22, 8, 15);
+  scatter('h', 58, 34, 44, 22, 6, 16);
 
-  // — Ruined Castle (SE) —
-  fill(50, 29, 20, 11, '#');
-  fill(51, 30, 18, 9, ':');
-  set(50, 34, ':'); // gate
-  fill(42, 34, 8, 1, ','); // approach road
-  set(66, 34, 'X'); // the Fallen King's throne
+  // ——— Havenbrook ———
+  fill(84, 70, 12, 9, ','); // the town square
+  building(74, 60, 8, 6, 78, 65); // general store
+  building(84, 60, 8, 6, 88, 65); // town hall
+  building(96, 60, 9, 6, 100, 65); // the smithy
+  set(98, 62, 'U'); set(102, 62, 'A');
+  building(74, 80, 8, 6, 78, 80); // the inn
+  set(76, 82, 'R');
+  building(96, 80, 9, 6, 100, 80); // the chapel
+  set(90, 74, '#'); // the town well
 
-  // — Emberdeep (far S) —
-  fill(44, 41, 26, 6, '%');
-  set(46, 40, ':'); set(47, 40, ':'); // entrance from the castle road
-  set(67, 44, 'E'); // Embermaw's forge-heart
+  // ——— fields south of town ———
+  scatter('b', 76, 92, 28, 10, 4, 17);
+  scatter('z', 76, 92, 28, 10, 4, 18);
 
-  // — The Void Rift (S) —
-  fill(30, 42, 10, 5, '!');
-  set(31, 43, 'v'); set(38, 42, 'v');
-  set(33, 45, 'V'); // Voidheart
-  set(37, 45, 'N'); // Nethrax
+  // ——— Greenfields & Copperhill ———
+  scatter('T', 110, 52, 56, 40, 6, 19);
+  scatter('1', 130, 74, 22, 16, 5, 20);
+  scatter('2', 130, 74, 22, 16, 5, 21);
+  scatter('8', 132, 66, 18, 7, 3, 22);
+
+  // ——— Darkspine Mountains: richer ore the deeper you climb ———
+  fill(172, 42, 66, 64, ':');
+  fill(188, 50, 2, 20, '#');
+  fill(204, 70, 2, 24, '#');
+  fill(214, 48, 2, 18, '#');
+  fill(196, 88, 2, 14, '#');
+  scatter('3', 174, 46, 18, 34, 6, 23, ':');
+  scatter('4', 180, 48, 22, 36, 6, 24, ':');
+  scatter('5', 196, 52, 14, 32, 4, 25, ':');
+  scatter('6', 210, 54, 12, 30, 3, 26, ':');
+  set(224, 66, '7'); set(228, 88, '7');
+
+  // ——— Duskmire Swamp & the Sunken Crypt ———
+  fill(42, 104, 84, 36, '_');
+  scatter('d', 46, 106, 76, 30, 5, 27, '_');
+  scatter('e', 60, 112, 60, 26, 4, 28, '_');
+  scatter('n', 80, 118, 44, 20, 4, 29, '_');
+  fill(54, 116, 20, 18, '#');
+  fill(56, 118, 16, 14, '_');
+  set(63, 116, '_'); set(64, 116, '_'); // the crypt mouth
+  set(62, 126, 'K'); // Korgath's lair
+
+  // ——— the Ruined Castle ———
+  fill(132, 100, 44, 28, '#');
+  fill(134, 102, 40, 24, ':');
+  set(150, 100, ':'); set(151, 100, ':'); // the shattered gate
+  set(168, 112, 'X'); // the Fallen King's throne
+
+  // ——— Emberdeep ———
+  fill(178, 112, 60, 30, '%');
+  set(226, 132, 'E'); // Embermaw's forge-heart
+
+  // ——— the Void Rift ———
+  fill(120, 132, 26, 10, '!');
+  set(122, 134, 'v'); set(134, 133, 'v'); set(143, 136, 'v');
+  set(128, 136, 'V'); // Voidheart
+  set(140, 138, 'N'); // Nethrax
 
   return g;
 }
@@ -143,6 +229,7 @@ export interface ResourceConfig {
 
 export const RESOURCE_BY_CHAR: Record<string, ResourceConfig> = {
   T: { actionId: 'tree', uses: 6, respawn: 15, depleteMsg: 'The tree falls.' },
+  h: { actionId: 'birch', uses: 6, respawn: 16, depleteMsg: 'The birch falls.' },
   O: { actionId: 'oak', uses: 6, respawn: 18, depleteMsg: 'The oak falls.' },
   W: { actionId: 'willow', uses: 6, respawn: 20, depleteMsg: 'The willow falls.' },
   P: { actionId: 'maple', uses: 6, respawn: 24, depleteMsg: 'The maple falls.' },
@@ -150,14 +237,18 @@ export const RESOURCE_BY_CHAR: Record<string, ResourceConfig> = {
   G: { actionId: 'magic_tree', uses: 4, respawn: 40, depleteMsg: 'The magic tree fades away.' },
   '1': { actionId: 'copper', uses: 4, respawn: 12, depleteMsg: 'The copper vein is exhausted.' },
   '2': { actionId: 'tin', uses: 4, respawn: 12, depleteMsg: 'The tin vein is exhausted.' },
+  '8': { actionId: 'silver', uses: 4, respawn: 14, depleteMsg: 'The silver vein is exhausted.' },
   '3': { actionId: 'iron', uses: 4, respawn: 16, depleteMsg: 'The iron vein is exhausted.' },
   '4': { actionId: 'coal_rock', uses: 4, respawn: 20, depleteMsg: 'The coal seam is exhausted.' },
   '5': { actionId: 'mithril_rock', uses: 3, respawn: 28, depleteMsg: 'The mithril vein is exhausted.' },
   '6': { actionId: 'adamantite_rock', uses: 3, respawn: 34, depleteMsg: 'The adamantite vein is exhausted.' },
   '7': { actionId: 'runite_rock', uses: 2, respawn: 45, depleteMsg: 'The runite vein is exhausted.' },
   f: { actionId: 'shrimp_spot', uses: 0, respawn: 0, depleteMsg: '' },
+  a: { actionId: 'sardine_spot', uses: 0, respawn: 0, depleteMsg: '' },
+  c: { actionId: 'herring_spot', uses: 0, respawn: 0, depleteMsg: '' },
   g: { actionId: 'trout_spot', uses: 0, respawn: 0, depleteMsg: '' },
   j: { actionId: 'salmon_spot', uses: 0, respawn: 0, depleteMsg: '' },
+  u: { actionId: 'pike_spot', uses: 0, respawn: 0, depleteMsg: '' },
   l: { actionId: 'lobster_spot', uses: 0, respawn: 0, depleteMsg: '' },
   w: { actionId: 'swordfish_spot', uses: 0, respawn: 0, depleteMsg: '' },
   x: { actionId: 'shark_spot', uses: 0, respawn: 0, depleteMsg: '' },
@@ -189,6 +280,15 @@ for (let y = 0; y < MAP_H; y++) {
   }
 }
 
+/** Boss id → lair tile, scanned from the map. */
+export const BOSS_LAIRS: Record<string, { x: number; y: number }> = {};
+for (let y = 0; y < MAP_H; y++) {
+  for (let x = 0; x < MAP_W; x++) {
+    const bossId = LAIR_BY_CHAR[MAP[y][x]];
+    if (bossId) BOSS_LAIRS[bossId] = { x, y };
+  }
+}
+
 // ——— NPCs ———
 
 export interface NpcDef {
@@ -205,25 +305,30 @@ export interface NpcDef {
 }
 
 export const NPCS: NpcDef[] = [
-  { id: 'marla', name: 'Shopkeeper Marla', icon: '🧑‍🌾', x: 11, y: 16, kind: 'shop', dialog: 'Welcome to the Havenbrook General Store! Buying or selling, love?' },
-  { id: 'boren', name: 'Boren the Smith', icon: '🧔', x: 24, y: 16, kind: 'quest', questIds: ['smiths_apprentice'], dialog: 'The furnace and anvil are free for any hand that knows hot metal.' },
-  { id: 'tam', name: 'Innkeeper Tam', icon: '🧑', x: 10, y: 23, kind: 'quest', questIds: ['rat_problem'], dialog: 'Mind the cellar door. The scratching started a fortnight ago…' },
-  { id: 'colette', name: 'Chef Colette', icon: '👩‍🍳', x: 12, y: 22, kind: 'quest', questIds: ['fish_for_compliments'], dialog: 'A feast without trout is just a sad meeting with bread.' },
-  { id: 'aldous', name: 'Father Aldous', icon: '🧓', x: 23, y: 23, kind: 'quest', questIds: ['grave_matters'], dialog: 'The dead of Duskmire do not sleep. Help me give them rest.' },
-  { id: 'hesta', name: 'Hesta the Tanner', icon: '👩‍🔧', x: 14, y: 20, kind: 'quest', questIds: ['cowhide_couture'], dialog: 'Hides! Fresh hides! The pasture cows practically donate them.' },
-  { id: 'bram', name: 'Mayor Bram', icon: '🤵', x: 18, y: 18, kind: 'quest', questIds: ['giant_trouble'], dialog: 'Boulders on the trade road again. This town cannot afford giants.' },
-  { id: 'elowen', name: 'Elowen the Wizard', icon: '🧙‍♀️', x: 4, y: 15, kind: 'quest', questIds: ['demons_bane'], dialog: 'I told the apprentices: NO unsupervised summoning circles.' },
-  { id: 'vex', name: 'A Shady Figure', icon: '🕵️', x: 26, y: 24, kind: 'quest', questIds: ['light_fingers'], dialog: 'The Guild that does not exist is always recruiting. Hypothetically.' },
-  { id: 'roderic', name: 'Steward Roderic', icon: '🫅', x: 47, y: 34, kind: 'quest', questIds: ['dragon_slayer', 'the_kings_end', 'into_the_void'], dialog: 'The castle has not known a rightful ruler in a hundred years.' },
-  { id: 'mira', name: 'Mira the Novice', icon: '🧝‍♀️', x: 19, y: 20, kind: 'slayer', masterId: 'mira', dialog: 'Everyone starts with rats. Even the legends. Especially the legends.' },
-  { id: 'dorn', name: 'Dorn Ironfist', icon: '🧔‍♂️', x: 49, y: 13, kind: 'slayer', masterId: 'dorn', dialog: 'The mountains breed hard beasts. I keep the ledger of which must die.' },
-  { id: 'zyra', name: 'Zyra the Veiled', icon: '🧛‍♀️', x: 45, y: 42, kind: 'slayer', masterId: 'zyra', dialog: 'You smell the sulfur? Good. Fear keeps slayers alive.' },
-  { id: 'pick_urchin', name: 'Street Urchin', icon: '🧒', x: 15, y: 20, kind: 'thieve', thieveId: 'urchin', dialog: 'Spare a coin? No? Worth a try.' },
-  { id: 'pick_farmer', name: 'Farmer Gwen', icon: '👨‍🌾', x: 34, y: 18, kind: 'thieve', thieveId: 'farmer', dialog: 'These cows will not herd themselves.' },
-  { id: 'pick_merchant', name: 'Traveling Merchant', icon: '🧑‍💼', x: 13, y: 18, kind: 'thieve', thieveId: 'merchant', dialog: 'Finest silks east of the mountains! Do not touch.' },
-  { id: 'pick_noble', name: 'Idle Noble', icon: '🤵‍♂️', x: 55, y: 31, kind: 'thieve', thieveId: 'noble', dialog: 'Guards! Is that a commoner looking at me?' },
-  { id: 'pick_knight', name: 'Castle Knight', icon: '🏇', x: 63, y: 35, kind: 'thieve', thieveId: 'knight', dialog: 'The King will rise again. We keep the watch.' },
-  { id: 'pick_elf', name: 'Elf Emissary', icon: '🧝', x: 3, y: 30, kind: 'thieve', thieveId: 'elf', dialog: 'The grove remembers when your town was a single campfire.' },
+  // Havenbrook
+  { id: 'marla', name: 'Shopkeeper Marla', icon: '🧑‍🌾', x: 78, y: 63, kind: 'shop', dialog: 'Welcome to the Havenbrook General Store! Buying or selling, love?' },
+  { id: 'boren', name: 'Boren the Smith', icon: '🧔', x: 101, y: 63, kind: 'quest', questIds: ['smiths_apprentice'], dialog: 'The furnace and anvil are free for any hand that knows hot metal.' },
+  { id: 'tam', name: 'Innkeeper Tam', icon: '🧑', x: 77, y: 83, kind: 'quest', questIds: ['rat_problem'], dialog: 'Mind the cellar door. The scratching started a fortnight ago…' },
+  { id: 'colette', name: 'Chef Colette', icon: '👩‍🍳', x: 79, y: 83, kind: 'quest', questIds: ['fish_for_compliments'], dialog: 'A feast without trout is just a sad meeting with bread.' },
+  { id: 'aldous', name: 'Father Aldous', icon: '🧓', x: 99, y: 83, kind: 'quest', questIds: ['grave_matters'], dialog: 'The dead of Duskmire do not sleep. Help me give them rest.' },
+  { id: 'hesta', name: 'Hesta the Tanner', icon: '👩‍🔧', x: 84, y: 73, kind: 'quest', questIds: ['cowhide_couture'], dialog: 'Hides! Fresh hides! The pasture cows practically donate them.' },
+  { id: 'bram', name: 'Mayor Bram', icon: '🤵', x: 88, y: 63, kind: 'quest', questIds: ['giant_trouble'], dialog: 'Boulders on the trade road again. This town cannot afford giants.' },
+  { id: 'vex', name: 'A Shady Figure', icon: '🕵️', x: 95, y: 77, kind: 'quest', questIds: ['light_fingers'], dialog: 'The Guild that does not exist is always recruiting. Hypothetically.' },
+  { id: 'mira', name: 'Mira the Novice', icon: '🧝‍♀️', x: 92, y: 72, kind: 'slayer', masterId: 'mira', dialog: 'Everyone starts with rats. Even the legends. Especially the legends.' },
+  { id: 'pick_urchin', name: 'Street Urchin', icon: '🧒', x: 89, y: 76, kind: 'thieve', thieveId: 'urchin', dialog: 'Spare a coin? No? Worth a try.' },
+  { id: 'pick_merchant', name: 'Traveling Merchant', icon: '🧑‍💼', x: 86, y: 71, kind: 'thieve', thieveId: 'merchant', dialog: 'Finest silks east of the mountains! Do not touch.' },
+  // Port Selwick
+  { id: 'sella', name: 'Shopkeeper Sella', icon: '🧜‍♀️', x: 106, y: 19, kind: 'shop', dialog: 'Fresh off the boats! Well. Most of it.' },
+  // the countryside
+  { id: 'elowen', name: 'Elowen the Wizard', icon: '🧙‍♀️', x: 52, y: 73, kind: 'quest', questIds: ['demons_bane'], dialog: 'I told the apprentices: NO unsupervised summoning circles.' },
+  { id: 'pick_farmer', name: 'Farmer Gwen', icon: '👨‍🌾', x: 82, y: 96, kind: 'thieve', thieveId: 'farmer', dialog: 'These cows will not herd themselves.' },
+  { id: 'pick_elf', name: 'Elf Emissary', icon: '🧝', x: 16, y: 112, kind: 'thieve', thieveId: 'elf', dialog: 'The grove remembers when your town was a single campfire.' },
+  // the frontier
+  { id: 'dorn', name: 'Dorn Ironfist', icon: '🧔‍♂️', x: 170, y: 72, kind: 'slayer', masterId: 'dorn', dialog: 'The mountains breed hard beasts. I keep the ledger of which must die.' },
+  { id: 'roderic', name: 'Steward Roderic', icon: '🫅', x: 150, y: 98, kind: 'quest', questIds: ['dragon_slayer', 'the_kings_end', 'into_the_void'], dialog: 'The castle has not known a rightful ruler in a hundred years.' },
+  { id: 'pick_noble', name: 'Idle Noble', icon: '🤵‍♂️', x: 152, y: 108, kind: 'thieve', thieveId: 'noble', dialog: 'Guards! Is that a commoner looking at me?' },
+  { id: 'pick_knight', name: 'Castle Knight', icon: '🏇', x: 160, y: 114, kind: 'thieve', thieveId: 'knight', dialog: 'The King will rise again. We keep the watch.' },
+  { id: 'zyra', name: 'Zyra the Veiled', icon: '🧛‍♀️', x: 182, y: 116, kind: 'slayer', masterId: 'zyra', dialog: 'You smell the sulfur? Good. Fear keeps slayers alive.' },
 ];
 
 export const NPC_MAP = Object.fromEntries(NPCS.map((n) => [n.id, n]));
@@ -242,28 +347,46 @@ export interface SpawnDef {
   y: number;
 }
 
+function cluster(defId: string, cx: number, cy: number, n: number, radius: number, seed: number): SpawnDef[] {
+  const out: SpawnDef[] = [];
+  for (let k = 0; k < n; k++) {
+    const a = Math.sin(seed * 89.7 + k * 37.3) * 43758.5453;
+    const b = Math.sin(seed * 13.1 + k * 71.9) * 24634.6345;
+    const dx = Math.round(((a - Math.floor(a)) * 2 - 1) * radius);
+    const dy = Math.round(((b - Math.floor(b)) * 2 - 1) * radius);
+    out.push({ defId, x: cx + dx, y: cy + dy });
+  }
+  return out;
+}
+
 export const SPAWNS: SpawnDef[] = [
-  ...([[29, 21], [30, 22], [28, 24], [29, 25]] as const).map(([x, y]) => ({ defId: 'giant_rat', x, y })),
-  ...([[33, 15], [35, 16], [37, 15], [34, 17], [36, 18]] as const).map(([x, y]) => ({ defId: 'cow', x, y })),
-  ...([[37, 23], [38, 25], [36, 26], [39, 22]] as const).map(([x, y]) => ({ defId: 'goblin', x, y })),
-  ...([[12, 32], [16, 33], [20, 32], [24, 33]] as const).map(([x, y]) => ({ defId: 'skeleton', x, y })),
-  ...([[14, 35], [18, 35], [22, 35], [26, 35]] as const).map(([x, y]) => ({ defId: 'zombie', x, y })),
-  ...([[46, 34], [48, 33]] as const).map(([x, y]) => ({ defId: 'guard', x, y })),
-  ...([[43, 15], [45, 18], [44, 22], [46, 25]] as const).map(([x, y]) => ({ defId: 'hill_giant', x, y })),
-  ...([[26, 39], [30, 40], [33, 38], [28, 42]] as const).map(([x, y]) => ({ defId: 'moss_giant', x, y })),
-  ...([[54, 32], [58, 36], [62, 32], [64, 37]] as const).map(([x, y]) => ({ defId: 'black_knight', x, y })),
-  ...([[45, 4], [49, 7], [53, 5], [47, 9], [56, 7]] as const).map(([x, y]) => ({ defId: 'ice_troll', x, y })),
-  ...([[58, 19], [60, 23], [63, 21]] as const).map(([x, y]) => ({ defId: 'dust_wraith', x, y })),
-  ...([[47, 43], [50, 44], [53, 43]] as const).map(([x, y]) => ({ defId: 'lesser_demon', x, y })),
-  ...([[56, 44], [59, 43], [62, 45]] as const).map(([x, y]) => ({ defId: 'fire_giant', x, y })),
-  ...([[64, 42], [60, 45], [57, 42]] as const).map(([x, y]) => ({ defId: 'greater_demon', x, y })),
-  ...([[61, 7], [65, 9], [68, 6]] as const).map(([x, y]) => ({ defId: 'blue_dragon', x, y })),
-  ...([[13, 38], [11, 40], [14, 39]] as const).map(([x, y]) => ({ defId: 'crawling_horror', x, y })),
-  ...([[31, 44], [34, 43], [38, 43]] as const).map(([x, y]) => ({ defId: 'abyssal_fiend', x, y })),
+  ...cluster('giant_rat', 112, 80, 4, 4, 1),
+  ...cluster('giant_rat', 96, 92, 2, 3, 2),
+  ...cluster('cow', 120, 60, 4, 4, 3),
+  ...cluster('cow', 140, 60, 4, 4, 4),
+  ...cluster('goblin', 134, 84, 4, 4, 5),
+  ...cluster('goblin', 118, 90, 4, 4, 6),
+  ...cluster('skeleton', 60, 110, 6, 5, 7),
+  ...cluster('zombie', 86, 112, 6, 5, 8),
+  ...cluster('guard', 150, 96, 3, 3, 9),
+  ...cluster('hill_giant', 166, 64, 3, 4, 10),
+  ...cluster('hill_giant', 168, 84, 3, 4, 11),
+  ...cluster('moss_giant', 100, 124, 5, 5, 12),
+  ...cluster('black_knight', 152, 114, 6, 7, 13),
+  ...cluster('ice_troll', 170, 20, 4, 5, 14),
+  ...cluster('ice_troll', 190, 28, 3, 4, 15),
+  ...cluster('blue_dragon', 222, 24, 2, 4, 16),
+  ...cluster('blue_dragon', 208, 32, 2, 3, 17),
+  ...cluster('dust_wraith', 196, 70, 4, 5, 18),
+  ...cluster('lesser_demon', 192, 122, 5, 5, 19),
+  ...cluster('greater_demon', 212, 126, 4, 4, 20),
+  ...cluster('fire_giant', 200, 132, 5, 5, 21),
+  ...cluster('crawling_horror', 62, 122, 4, 3, 22),
+  ...cluster('abyssal_fiend', 132, 136, 4, 3, 23),
 ];
 
 /** Where you wake up (Havenbrook square) and where a new game starts. */
-export const HOME = { x: 17, y: 20 };
+export const HOME = { x: 90, y: 72 };
 
 // ——— zones ———
 
@@ -276,18 +399,23 @@ interface Zone {
 }
 
 const ZONES: Zone[] = [
-  { name: 'The Sunken Crypt', x: 8, y: 36, w: 8, h: 6 },
-  { name: 'Havenbrook', x: 6, y: 12, w: 23, h: 16 },
-  { name: 'Willowmere Lake', x: 1, y: 1, w: 30, h: 11 },
-  { name: 'The Frozen Reach', x: 40, y: 1, w: 31, h: 11 },
-  { name: 'Darkspine Mountains', x: 48, y: 12, w: 23, h: 17 },
-  { name: 'The Ruined Castle', x: 48, y: 29, w: 23, h: 12 },
-  { name: 'Emberdeep', x: 43, y: 40, w: 28, h: 7 },
-  { name: 'The Void Rift', x: 29, y: 41, w: 12, h: 6 },
-  { name: 'Duskmire Swamp', x: 4, y: 29, w: 40, h: 16 },
-  { name: 'The Elder Grove', x: 1, y: 28, w: 8, h: 10 },
-  { name: 'Westwood', x: 1, y: 12, w: 7, h: 16 },
-  { name: 'Greenfields', x: 28, y: 12, w: 20, h: 17 },
+  { name: 'The Sunken Crypt', x: 54, y: 116, w: 20, h: 18 },
+  { name: 'Stonebridge', x: 55, y: 17, w: 14, h: 10 },
+  { name: 'Port Selwick', x: 96, y: 4, w: 40, h: 28 },
+  { name: 'Havenbrook', x: 70, y: 56, w: 40, h: 34 },
+  { name: 'The Elder Grove', x: 4, y: 100, w: 34, h: 30 },
+  { name: 'Willowmere Lake', x: 16, y: 20, w: 52, h: 36 },
+  { name: 'Westwood', x: 2, y: 50, w: 48, h: 50 },
+  { name: 'The North Pass', x: 56, y: 28, w: 46, h: 28 },
+  { name: 'The Frozen Reach', x: 148, y: 1, w: 91, h: 41 },
+  { name: 'Copperhill', x: 126, y: 64, w: 30, h: 28 },
+  { name: 'The Ruined Castle', x: 128, y: 96, w: 50, h: 34 },
+  { name: 'Emberdeep', x: 176, y: 108, w: 63, h: 35 },
+  { name: 'The Void Rift', x: 118, y: 130, w: 30, h: 13 },
+  { name: 'Duskmire Swamp', x: 40, y: 100, w: 88, h: 43 },
+  { name: 'Darkspine Mountains', x: 170, y: 42, w: 69, h: 66 },
+  { name: 'Greenfields', x: 100, y: 50, w: 70, h: 48 },
+  { name: 'The North Shore', x: 1, y: 1, w: 238, h: 18 },
 ];
 
 export function zoneName(x: number, y: number): string {
@@ -295,13 +423,4 @@ export function zoneName(x: number, y: number): string {
     if (x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h) return z.name;
   }
   return 'The Wilds';
-}
-
-/** Boss id → lair tile, scanned from the map. */
-export const BOSS_LAIRS: Record<string, { x: number; y: number }> = {};
-for (let y = 0; y < MAP_H; y++) {
-  for (let x = 0; x < MAP_W; x++) {
-    const bossId = LAIR_BY_CHAR[MAP[y][x]];
-    if (bossId) BOSS_LAIRS[bossId] = { x, y };
-  }
 }

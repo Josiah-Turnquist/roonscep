@@ -24,7 +24,10 @@ export const BOWS = [
 /** Fish shared by items (raw + cooked) and cooking recipes. */
 export const FISH = [
   { raw: 'raw_shrimp', cooked: 'shrimp', name: 'Shrimp', fishLevel: 1, fishXp: 10, cookLevel: 1, cookXp: 30, heals: 3, rawValue: 3, value: 5, burn: 0.3 },
+  { raw: 'raw_sardine', cooked: 'sardine', name: 'Sardine', fishLevel: 5, fishXp: 20, cookLevel: 5, cookXp: 40, heals: 4, rawValue: 5, value: 8, burn: 0.3 },
+  { raw: 'raw_herring', cooked: 'herring', name: 'Herring', fishLevel: 12, fishXp: 30, cookLevel: 10, cookXp: 50, heals: 5, rawValue: 8, value: 12, burn: 0.32 },
   { raw: 'raw_trout', cooked: 'trout', name: 'Trout', fishLevel: 20, fishXp: 50, cookLevel: 15, cookXp: 70, heals: 7, rawValue: 12, value: 20, burn: 0.35 },
+  { raw: 'raw_pike', cooked: 'pike', name: 'Pike', fishLevel: 25, fishXp: 60, cookLevel: 20, cookXp: 80, heals: 8, rawValue: 15, value: 25, burn: 0.35 },
   { raw: 'raw_salmon', cooked: 'salmon', name: 'Salmon', fishLevel: 30, fishXp: 70, cookLevel: 25, cookXp: 90, heals: 9, rawValue: 20, value: 30, burn: 0.35 },
   { raw: 'raw_lobster', cooked: 'lobster', name: 'Lobster', fishLevel: 40, fishXp: 90, cookLevel: 40, cookXp: 120, heals: 12, rawValue: 40, value: 60, burn: 0.4 },
   { raw: 'raw_swordfish', cooked: 'swordfish', name: 'Swordfish', fishLevel: 50, fishXp: 100, cookLevel: 45, cookXp: 140, heals: 14, rawValue: 65, value: 100, burn: 0.45 },
@@ -34,6 +37,7 @@ export const FISH = [
 const list: Item[] = [
   // Logs
   { id: 'logs', name: 'Logs', icon: '🪵', value: 5 },
+  { id: 'birch_logs', name: 'Birch Logs', icon: '🪵', value: 8 },
   { id: 'oak_logs', name: 'Oak Logs', icon: '🪵', value: 12 },
   { id: 'willow_logs', name: 'Willow Logs', icon: '🪵', value: 25 },
   { id: 'maple_logs', name: 'Maple Logs', icon: '🪵', value: 45 },
@@ -42,6 +46,7 @@ const list: Item[] = [
   // Ores
   { id: 'copper_ore', name: 'Copper Ore', icon: '🟠', value: 4 },
   { id: 'tin_ore', name: 'Tin Ore', icon: '⚪', value: 4 },
+  { id: 'silver_ore', name: 'Silver Ore', icon: '⚪', value: 25 },
   { id: 'iron_ore', name: 'Iron Ore', icon: '🟤', value: 15 },
   { id: 'coal', name: 'Coal', icon: '⚫', value: 30 },
   { id: 'mithril_ore', name: 'Mithril Ore', icon: '🔵', value: 80 },
@@ -88,6 +93,7 @@ const list: Item[] = [
   { id: 'adept_staff', name: 'Adept Staff', icon: '🪄', value: 800, slot: 'weapon', combatStyle: 'magic', magicBonus: 22, levelReq: { skill: 'magic', level: 30 } },
   { id: 'master_staff', name: 'Master Staff', icon: '🔮', value: 4000, slot: 'weapon', combatStyle: 'magic', magicBonus: 42, levelReq: { skill: 'magic', level: 60 } },
   // Gem amulets
+  { id: 'silver_amulet', name: 'Silver Amulet', icon: '📿', value: 120, slot: 'amulet', attackBonus: 2, magicBonus: 2, levelReq: { skill: 'defence', level: 1 } },
   { id: 'sapphire_amulet', name: 'Sapphire Amulet', icon: '📿', value: 400, slot: 'amulet', attackBonus: 4, magicBonus: 4, levelReq: { skill: 'defence', level: 1 } },
   { id: 'emerald_amulet', name: 'Emerald Amulet', icon: '📿', value: 800, slot: 'amulet', defenceBonus: 6, rangedBonus: 4, levelReq: { skill: 'defence', level: 1 } },
   { id: 'ruby_amulet', name: 'Ruby Amulet', icon: '📿', value: 1500, slot: 'amulet', strengthBonus: 8, levelReq: { skill: 'defence', level: 1 } },

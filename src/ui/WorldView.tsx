@@ -9,6 +9,7 @@ import { GATHER_MAP } from '../game/actions';
 import { GameState, MonsterEntity } from '../game/types';
 import { buildWorld, tilePos, WorldHandles } from './three/worldBuilder';
 import { buildMonsterModel, buildPlayerModel, CharModel } from './three/models';
+
 import { NpcDialog, StationDialog } from './Dialogs';
 import CombatHud from './CombatHud';
 import TickBar from './TickBar';
@@ -36,7 +37,7 @@ function findPath(
     [1, 0], [-1, 0], [0, 1], [0, -1],
   ];
   let goal: [number, number] | null = null;
-  for (let qi = 0; qi < queue.length && qi < 4000 && !goal; qi++) {
+  for (let qi = 0; qi < queue.length && qi < 30000 && !goal; qi++) {
     const [cx, cy] = queue[qi];
     for (const [dx, dy] of DIRS) {
       const nx = cx + dx;
@@ -233,6 +234,7 @@ export default function WorldView() {
     player.position.copy(tilePos(st0.world.px, st0.world.py));
     scene.add(player);
     let playerMoving = 0;
+    let lastEqKey = '';
 
     // monster entities — each gets a personal delay before acting on a new tile,
     // so a world tick never moves the whole zone in lockstep
@@ -544,6 +546,12 @@ export default function WorldView() {
       playerMoving += (Math.min(1, remaining * 6) - playerMoving) * Math.min(1, dt * 10);
       if (remaining > 0.02) faceTowards(player, target, dt);
       playerModel.update(dt, t, playerMoving, working);
+      // reflect wielded gear on the model
+      const eqKey = JSON.stringify(st.equipment);
+      if (eqKey !== lastEqKey) {
+        lastEqKey = eqKey;
+        playerModel.setEquipment(st.equipment);
+      }
 
       // camera follows
       focus.lerp(target, Math.min(1, dt * 5));

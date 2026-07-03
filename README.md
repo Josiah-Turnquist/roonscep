@@ -4,18 +4,22 @@ A silly, lovingly dumbed-down RuneScape-like in the browser: a low-poly semi-3D 
 
 ## The world
 
-A 72×48 tile overworld rendered in three.js — angled camera (drag or Q/E to spin, scroll to zoom), click-to-walk pathfinding with proper diagonal strolling, WASD if you insist:
+A 240×144 tile realm rendered in three.js — angled camera (drag or arrow keys to spin, scroll to zoom, live compass), click-to-walk pathfinding with proper diagonal strolling, WASD if you insist:
 
-- **Havenbrook** — home town: general store, smithy (furnace + anvil), inn (cooking range), chapel, quest givers, and Mira the slayer master
+- **Havenbrook** — the starting town at the crossroads: general store, town hall, smithy (furnace + anvil), inn (cooking range), chapel, quest givers, and Mira the slayer master
+- **Port Selwick** — fishing town on the north coast: a pier with lobster/swordfish/shark waters, sardine and herring shoals, a smokehouse range, and a second shop
+- **The Selwick River & Stonebridge** — trout runs from Willowmere Lake to the sea under the northern highway
 - **Westwood & the Elder Grove** — trees from normal to magic, herbs, an elf with deep pockets
-- **Willowmere Lake** — fishing spots (shrimp → lobster), willows
-- **Greenfields & Copperhill** — cows (that look like cows), goblins, copper and tin
-- **Darkspine Mountains** — iron through runite the deeper you climb; hill giants, dust wraiths, Dorn's slayer camp
+- **Willowmere Lake** — shrimp, pike, salmon, willows round the shore
+- **Greenfields & Copperhill** — cows (that look like cows), goblins, copper, tin and silver
+- **Darkspine Mountains** — iron through runite, richer the deeper you climb; hill giants, dust wraiths, Dorn's road camp
 - **Duskmire Swamp** — undead, herbs, and the Sunken Crypt where Korgath waits
-- **The Frozen Reach** — ice trolls, blue dragons, shark fishing, Frostfang's lair
+- **The Frozen Reach** — snowfields and an ice bay: ice trolls, blue dragons, Frostfang's lair
 - **The Ruined Castle** — black knights, rich pickpocketing, the Fallen King's throne
 - **Emberdeep** — demons and fire giants around Embermaw's forge-heart; Zyra the slayer master
 - **The Void Rift** — abyssal fiends, Voidheart, and Nethrax, Devourer of Souls
+
+Wielded gear is visible on your character, tinted by tier — bronze through rune and every unique.
 
 Everything is a real low-poly model — articulated humanoids with hats and swinging limbs, horned cows with udders, scurrying rats, winged dragons, floating void orbs. Resource nodes visibly deplete into stumps and rubble, monsters wander their territory, combat happens in the world with hit splats and overhead HP bars.
 

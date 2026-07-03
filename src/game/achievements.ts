@@ -2,6 +2,7 @@ import { GameState } from './types';
 import { levelForXp } from './xp';
 import { QUESTS } from './quests';
 import { BOSSES } from './monsters';
+import { SKILLS } from './skills';
 
 export interface AchievementDef {
   id: string;
@@ -36,5 +37,33 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'learning_experience', name: 'Learning Experience', icon: '💀', desc: 'Die 10 times', check: (s) => s.stats.deaths >= 10 },
   { id: 'hero_of_the_realm', name: 'Hero of the Realm', icon: '🛡️', desc: 'Complete every quest', check: (s) => QUESTS.every((q) => s.quests[q.id]?.status === 'done') },
 ];
+
+// ——— per-skill milestones: a goal to chase in every stretch of every skill ———
+
+const MILESTONE_TIERS: { level: number; title: string }[] = [
+  { level: 5, title: 'Novice' },
+  { level: 15, title: 'Apprentice' },
+  { level: 30, title: 'Adept' },
+  { level: 45, title: 'Journeyman' },
+  { level: 60, title: 'Expert' },
+  { level: 75, title: 'Master' },
+  { level: 92, title: 'Grandmaster' },
+];
+
+for (const sk of SKILLS) {
+  for (const tier of MILESTONE_TIERS) {
+    ACHIEVEMENTS.push({
+      id: `${sk.id}_lvl_${tier.level}`,
+      name: `${tier.title} ${sk.name}`,
+      icon: sk.icon,
+      desc: `Reach ${sk.name} level ${tier.level}`,
+      check: (s) => levelForXp(s.xp[sk.id]) >= tier.level,
+    });
+  }
+}
+
+export const MILESTONE_IDS = new Set(
+  SKILLS.flatMap((sk) => MILESTONE_TIERS.map((t) => `${sk.id}_lvl_${t.level}`)),
+);
 
 export const ACHIEVEMENT_MAP = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));

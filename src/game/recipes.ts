@@ -4,6 +4,7 @@ import { BOWS, FISH, METALS } from './items';
 const recipes: Recipe[] = [
   // Crafting
   { id: 'craft_leather', name: 'Tan Leather', icon: '🟫', skill: 'crafting', level: 1, xp: 14, inputs: { cowhide: 1 }, output: 'leather' },
+  { id: 'craft_silver_amulet', name: 'Silver Amulet', icon: '📿', skill: 'crafting', level: 8, xp: 40, inputs: { silver_ore: 1 }, goldCost: 30, output: 'silver_amulet' },
   { id: 'craft_bowstring', name: 'Spin Bowstring', icon: '🧶', skill: 'crafting', level: 10, xp: 15, inputs: { flax: 2 }, output: 'bowstring' },
   { id: 'craft_coif', name: 'Leather Coif', icon: '🪖', skill: 'crafting', level: 9, xp: 25, inputs: { leather: 1 }, output: 'leather_coif' },
   { id: 'craft_chaps', name: 'Leather Chaps', icon: '👖', skill: 'crafting', level: 11, xp: 30, inputs: { leather: 2 }, output: 'leather_chaps' },
