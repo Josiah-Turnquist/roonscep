@@ -199,6 +199,81 @@ const FISH_COLOR: Record<string, number> = {
   l: 0xff7a5c, w: 0x7ae0ff, x: 0xc0d8e8,
 };
 
+// ——— low blocking scenery: fences, graves, cargo, hay ———
+
+function buildFence(x: number, y: number): THREE.Group {
+  const g = new THREE.Group();
+  const post = solid(new THREE.CylinderGeometry(0.05, 0.06, 0.55, 5), 0x6b4a2f);
+  post.position.y = 0.27;
+  g.add(post);
+  const conn = (cx: number, cy: number) => {
+    const c = tileAt(cx, cy);
+    return c === '|' || c === '#';
+  };
+  const link = (dx: number, dz: number) => {
+    for (const h of [0.18, 0.4]) {
+      const rail = solid(
+        new THREE.BoxGeometry(dx !== 0 ? 0.55 : 0.05, 0.05, dz !== 0 ? 0.55 : 0.05),
+        0x8a6a42,
+      );
+      rail.position.set(dx * 0.25, h, dz * 0.25);
+      g.add(rail);
+    }
+  };
+  if (conn(x + 1, y)) link(1, 0);
+  if (conn(x - 1, y)) link(-1, 0);
+  if (conn(x, y + 1)) link(0, 1);
+  if (conn(x, y - 1)) link(0, -1);
+  return g;
+}
+
+function buildGrave(x: number, y: number): THREE.Group {
+  const g = new THREE.Group();
+  const slab = solid(new THREE.BoxGeometry(0.3, 0.48, 0.09), 0x8a8378);
+  slab.position.y = 0.24;
+  g.add(slab);
+  const cap = solid(new THREE.SphereGeometry(0.15, 6, 4), 0x8a8378);
+  cap.scale.set(1, 0.7, 0.3);
+  cap.position.y = 0.48;
+  g.add(cap);
+  g.rotation.z = (hash(x, y) - 0.5) * 0.14;
+  g.rotation.y = (hash(y, x) - 0.5) * 0.35;
+  return g;
+}
+
+function buildCrates(x: number, y: number): THREE.Group {
+  const g = new THREE.Group();
+  const big = solid(new THREE.BoxGeometry(0.44, 0.44, 0.44), 0x8a6a42);
+  big.position.y = 0.22;
+  big.rotation.y = hash(x, y) * 0.6;
+  g.add(big);
+  const small = solid(new THREE.BoxGeometry(0.3, 0.3, 0.3), 0x9c7d4e);
+  small.position.set(0.06, 0.58, -0.04);
+  small.rotation.y = hash(y, x) * 0.9;
+  g.add(small);
+  const barrel = solid(new THREE.CylinderGeometry(0.16, 0.18, 0.42, 8), 0x6b4a2f);
+  barrel.position.set(-0.3, 0.21, 0.18);
+  g.add(barrel);
+  return g;
+}
+
+function buildHay(x: number, y: number): THREE.Group {
+  const g = new THREE.Group();
+  const bale = solid(new THREE.CylinderGeometry(0.28, 0.28, 0.55, 8), 0xd8c67a);
+  bale.rotation.z = Math.PI / 2;
+  bale.position.y = 0.28;
+  g.add(bale);
+  g.rotation.y = hash(x, y) * Math.PI;
+  return g;
+}
+
+const SCENERY_BUILDERS: Record<string, (x: number, y: number) => THREE.Group> = {
+  '|': buildFence,
+  '+': buildGrave,
+  '&': buildCrates,
+  $: buildHay,
+};
+
 // ——— stations & lairs ———
 
 function buildStation(type: string): THREE.Group {
@@ -261,6 +336,7 @@ export interface WorldHandles {
 export function buildWorld(scene: THREE.Scene): WorldHandles {
   const interactables = new THREE.Group();
   const overlay = new THREE.Group();
+  const scenery = new THREE.Group(); // fences, graves, cargo — blocking but not clickable
   const nodeVisuals = new Map<string, NodeVisual>();
   const animated: AnimatedEntry[] = [];
 
@@ -430,9 +506,14 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
         const label = makeTextSprite(boss.name, '#ff9a8a', 0.36);
         label.position.set(p.x, p.y + 2.0, p.z);
         overlay.add(label);
+      } else if (SCENERY_BUILDERS[char]) {
+        const s = SCENERY_BUILDERS[char](x, y);
+        s.position.copy(p);
+        scenery.add(s);
       }
     }
   }
+  scene.add(scenery);
 
   // — NPCs —
   for (const n of NPCS) {
@@ -528,7 +609,7 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
   // The world is static: freeze every matrix so three.js stops recomposing
   // thousands of unchanged transforms per frame. Animated subtrees are
   // re-enabled and are only ticked near the player (see WorldView).
-  for (const root of [terrain, water, walls, interactables, overlay] as THREE.Object3D[]) {
+  for (const root of [terrain, water, walls, interactables, overlay, scenery] as THREE.Object3D[]) {
     root.traverse((o) => {
       o.matrixAutoUpdate = false;
       o.updateMatrix();

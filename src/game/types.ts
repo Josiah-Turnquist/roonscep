@@ -129,6 +129,8 @@ export interface MonsterEntity {
 }
 
 export interface WorldState {
+  /** Layout version this world state was created under. */
+  v?: number;
   px: number;
   py: number;
   /** Successful gathers taken from a node since it last respawned. */

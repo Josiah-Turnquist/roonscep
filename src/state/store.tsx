@@ -19,7 +19,7 @@ import { SLAYER_MASTER_MAP, SLAYER_REWARDS } from '../game/slayer';
 import { QUEST_MAP } from '../game/quests';
 import { ACHIEVEMENTS } from '../game/achievements';
 import {
-  HOME, RESOURCE_BY_CHAR, SPAWNS, STATIONS, isWalkable, tileAt,
+  HOME, RESOURCE_BY_CHAR, SPAWNS, STATIONS, WORLD_VERSION, isWalkable, tileAt,
 } from '../game/world';
 
 export const TICK_MS = 1200;
@@ -70,6 +70,7 @@ const ZERO_STATS: Record<StatKey, number> = {
 
 function freshWorld(): WorldState {
   return {
+    v: WORLD_VERSION,
     px: HOME.x,
     py: HOME.y,
     nodeUses: {},
@@ -544,7 +545,9 @@ export function loadState(): GameState {
     if (!raw) return base;
     const saved = JSON.parse(raw) as Partial<GameState>;
     const savedWorld =
-      saved.world && saved.world.entities?.length === SPAWNS.length ? saved.world : base.world;
+      saved.world && saved.world.v === WORLD_VERSION && saved.world.entities?.length === SPAWNS.length
+        ? saved.world
+        : base.world;
     const s: GameState = {
       ...base,
       ...saved,

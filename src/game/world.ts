@@ -19,6 +19,9 @@
 export const MAP_W = 240;
 export const MAP_H = 144;
 
+/** Bump when the layout moves things — saved entity/node positions reset to match. */
+export const WORLD_VERSION = 2;
+
 // ——— tile legend ———
 // terrain: . grass  , road  ; sand  : rocky  _ swamp  * snow  % ember  ! void  ~ water  # wall  = wood floor/bridge
 // trees:   T tree  h birch  O oak  W willow  P maple  Y yew  G magic
@@ -27,6 +30,7 @@ export const MAP_H = 144;
 // forage:  b berries  z flax  q sunleaf  d mossbloom  e dragonwort  n duskthorn  o golden apple  v voidcap
 // stations: U furnace  A anvil  R range
 // lairs:   K korgath  E embermaw  F frostfang  X fallen king  V voidheart  N nethrax
+// scenery: | fence  + gravestone  & crates  $ hay bale  (block movement, low profile)
 
 const WALKABLE = new Set(['.', ',', ';', ':', '_', '*', '%', '!', '=']);
 
@@ -83,6 +87,17 @@ function buildMap(): string[][] {
     fill(x + 1, y + 1, w - 2, h - 2, '=');
     set(doorX, doorY, '=');
   };
+  /** A fence ring around a rect; call gate() afterwards to open passages. */
+  const fenceRect = (x: number, y: number, w: number, h: number) => {
+    for (let i = x; i < x + w; i++) {
+      set(i, y, '|');
+      set(i, y + h - 1, '|');
+    }
+    for (let j = y; j < y + h; j++) {
+      set(x, j, '|');
+      set(x + w - 1, j, '|');
+    }
+  };
 
   // ——— border cliffs ———
   fill(0, 0, MAP_W, 1, '#');
@@ -135,6 +150,7 @@ function buildMap(): string[][] {
   building(102, 17, 8, 6, 106, 22); // Sella's port store
   building(120, 17, 8, 6, 124, 22); // the smokehouse
   set(122, 19, 'R');
+  set(110, 14, '&'); set(116, 15, '&'); set(130, 16, '&'); // dockside cargo
   hRoad(100, 132, 24);
   vRoad(24, 32, 100);
 
@@ -158,7 +174,7 @@ function buildMap(): string[][] {
   scatter('h', 58, 34, 44, 22, 22, 16);
   scatter('T', 66, 36, 32, 18, 14, 34);
 
-  // ——— Havenbrook ———
+  // ——— Havenbrook, a walled town ———
   fill(84, 70, 12, 9, ','); // the town square
   building(74, 60, 8, 6, 78, 65); // general store
   building(84, 60, 8, 6, 88, 65); // town hall
@@ -168,18 +184,62 @@ function buildMap(): string[][] {
   set(76, 82, 'R');
   building(96, 80, 9, 6, 100, 80); // the chapel
   set(90, 74, '#'); // the town well
+  // the town wall, gated where the roads pass through
+  for (let i = 70; i <= 110; i++) {
+    set(i, 56, '#');
+    set(i, 90, '#');
+  }
+  for (let j = 56; j <= 90; j++) {
+    set(70, j, '#');
+    set(110, j, '#');
+  }
+  for (const gx of [99, 100, 101]) set(gx, 56, ','); // north gate
+  for (const gy of [73, 74, 75]) {
+    set(110, gy, ','); // east gate
+    set(70, gy, ','); // west gate
+  }
+  for (const gx of [87, 88, 89]) set(gx, 90, ','); // south gate
 
-  // ——— fields south of town ———
-  scatter('b', 76, 92, 28, 10, 6, 17);
-  scatter('z', 76, 92, 28, 10, 6, 18);
+  // ——— the graveyard, on the swamp road outside the south wall ———
+  fenceRect(92, 92, 9, 7);
+  set(95, 92, '.'); set(96, 92, '.'); // the gate
+  for (const gx of [93, 95, 97, 99]) set(gx, 94, '+');
+  for (const gx of [94, 96, 98]) set(gx, 96, '+');
+
+  // ——— Gwen's Farm, off the east road ———
+  building(114, 57, 7, 5, 117, 61); // the farmhouse
+  building(124, 57, 8, 6, 127, 62); // the barn
+  set(126, 63, '&'); // crates by the barn door
+  // the fenced pasture: the cows live HERE, and the fence actually holds them
+  fenceRect(112, 64, 25, 9);
+  set(123, 72, '.'); set(124, 72, '.'); // south gate, toward the road
+  set(112, 68, '.'); // a side gate
+  set(115, 70, '$'); set(134, 66, '$'); set(126, 69, '$'); // hay bales
+  // crop plots in tidy rows, south of the highway
+  fenceRect(114, 75, 11, 7);
+  set(119, 75, '.'); // plot gate
+  for (let i = 115; i <= 123; i += 1) {
+    set(i, 77, 'z');
+    if (i % 2 === 1) set(i, 79, 'z');
+  }
+  fenceRect(126, 75, 11, 7);
+  set(131, 75, '.');
+  for (let i = 127; i <= 135; i += 1) {
+    set(i, 77, 'b');
+    if (i % 2 === 0) set(i, 79, 'b');
+  }
 
   // ——— Greenfields & Copperhill ———
-  scatter('T', 110, 52, 56, 40, 34, 19);
+  scatter('T', 138, 52, 30, 40, 22, 19);
   scatter('h', 104, 44, 40, 12, 6, 35);
-  scatter('b', 112, 84, 30, 12, 3, 36);
-  scatter('1', 130, 74, 22, 16, 7, 20);
-  scatter('2', 130, 74, 22, 16, 7, 21);
-  scatter('8', 132, 66, 18, 7, 4, 22);
+  scatter('b', 140, 84, 24, 10, 3, 36);
+  scatter('1', 130, 84, 22, 8, 7, 20);
+  scatter('2', 130, 84, 22, 8, 7, 21);
+  scatter('8', 140, 66, 14, 7, 4, 22);
+
+  // ——— Dorn's camp at the mountain road's end ———
+  building(166, 68, 5, 4, 168, 71); // the slayer master's hut
+  set(172, 70, '&'); // his supply crates
 
   // ——— Darkspine Mountains: richer ore the deeper you climb ———
   organic(170, 42, 68, 64, ':', 6);
@@ -338,7 +398,7 @@ export const NPCS: NpcDef[] = [
   { id: 'sella', name: 'Shopkeeper Sella', icon: '🧜‍♀️', x: 106, y: 19, kind: 'shop', dialog: 'Fresh off the boats! Well. Most of it.' },
   // the countryside
   { id: 'elowen', name: 'Elowen the Wizard', icon: '🧙‍♀️', x: 52, y: 73, kind: 'quest', questIds: ['demons_bane'], dialog: 'I told the apprentices: NO unsupervised summoning circles.' },
-  { id: 'pick_farmer', name: 'Farmer Gwen', icon: '👨‍🌾', x: 82, y: 96, kind: 'thieve', thieveId: 'farmer', dialog: 'These cows will not herd themselves.' },
+  { id: 'pick_farmer', name: 'Farmer Gwen', icon: '👨‍🌾', x: 124, y: 73, kind: 'thieve', thieveId: 'farmer', dialog: 'These cows will not herd themselves. Well. The fence helps.' },
   { id: 'pick_elf', name: 'Elf Emissary', icon: '🧝', x: 16, y: 112, kind: 'thieve', thieveId: 'elf', dialog: 'The grove remembers when your town was a single campfire.' },
   // the frontier
   { id: 'dorn', name: 'Dorn Ironfist', icon: '🧔‍♂️', x: 170, y: 72, kind: 'slayer', masterId: 'dorn', dialog: 'The mountains breed hard beasts. I keep the ledger of which must die.' },
@@ -377,10 +437,11 @@ function cluster(defId: string, cx: number, cy: number, n: number, radius: numbe
 }
 
 export const SPAWNS: SpawnDef[] = [
-  ...cluster('giant_rat', 112, 80, 4, 4, 1),
-  ...cluster('giant_rat', 96, 92, 2, 3, 2),
-  ...cluster('cow', 120, 60, 4, 4, 3),
-  ...cluster('cow', 140, 60, 4, 4, 4),
+  ...cluster('giant_rat', 108, 84, 4, 4, 1),
+  ...cluster('giant_rat', 104, 94, 2, 3, 2),
+  // the herd lives inside Gwen's fenced pasture
+  ...cluster('cow', 118, 68, 4, 3, 3),
+  ...cluster('cow', 130, 68, 4, 3, 4),
   ...cluster('goblin', 134, 84, 4, 4, 5),
   ...cluster('goblin', 118, 90, 4, 4, 6),
   ...cluster('skeleton', 60, 110, 6, 5, 7),
@@ -417,6 +478,7 @@ interface Zone {
 
 const ZONES: Zone[] = [
   { name: 'The Sunken Crypt', x: 54, y: 116, w: 20, h: 18 },
+  { name: "Gwen's Farm", x: 111, y: 55, w: 27, h: 28 },
   { name: 'Stonebridge', x: 55, y: 17, w: 14, h: 10 },
   { name: 'Port Selwick', x: 96, y: 4, w: 40, h: 28 },
   { name: 'Havenbrook', x: 70, y: 56, w: 40, h: 34 },
