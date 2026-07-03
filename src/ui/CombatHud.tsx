@@ -69,7 +69,7 @@ export default function CombatHud() {
         </button>
         <button
           className={`btn small ${s.settings.chainCombat ? 'active-toggle' : ''}`}
-          title="After a kill, automatically engage the nearest monster of the same kind"
+          title="After a kill, run to the nearest monster of the same kind and attack it"
           onClick={() => dispatch({ type: 'SET_SETTINGS', patch: { chainCombat: !s.settings.chainCombat } })}
         >
           Auto-attack

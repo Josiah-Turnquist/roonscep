@@ -272,6 +272,7 @@ export default function WorldView() {
     let lastFxId = stateRef.current.fx.reduce((m, f) => Math.max(m, f.id), 0);
     let playerSwungAt = -1000;
     let foeSwungAt = -1000;
+    let prevFightMonster: string | null = null;
 
     // camera state
     const cam = camRef.current;
@@ -591,6 +592,52 @@ export default function WorldView() {
 
       // fight hp bar / target ring / boss stand-in
       const fight = st.activity?.type === 'combat' ? st.activity : null;
+
+      // auto-attack: after a kill, run to the next monster of the same kind and engage
+      if (
+        !fight &&
+        prevFightMonster &&
+        !st.activity &&
+        st.autoCombat &&
+        st.settings.chainCombat &&
+        pathRef.current.length === 0 &&
+        !pendingRef.current &&
+        !MONSTER_MAP[prevFightMonster].boss
+      ) {
+        const defId = prevFightMonster;
+        let best: { uid: number; x: number; y: number } | null = null;
+        let bd = Infinity;
+        for (const e of st.world.entities) {
+          if (e.defId !== defId || e.respawn > 0) continue;
+          const d = Math.max(Math.abs(e.x - st.world.px), Math.abs(e.y - st.world.py));
+          if (d < bd) {
+            bd = d;
+            best = e;
+          }
+        }
+        if (best && bd <= 8) {
+          const uid = best.uid;
+          const engage = () => {
+            const cur = stateRef.current;
+            const ent = cur.world.entities.find((en) => en.uid === uid);
+            if (!ent || ent.respawn > 0 || cur.activity) return;
+            const d = Math.max(Math.abs(ent.x - cur.world.px), Math.abs(ent.y - cur.world.py));
+            if (d <= 1) {
+              dispatch({ type: 'START_COMBAT_ENTITY', uid });
+            } else {
+              // it wandered while we ran over — path again
+              const p2 = findPath(
+                cur.world.px,
+                cur.world.py,
+                (gx, gy) => Math.max(Math.abs(gx - ent.x), Math.abs(gy - ent.y)) <= 1 && isWalkable(gx, gy),
+              );
+              if (p2) startWalking(p2, engage);
+            }
+          };
+          engage();
+        }
+      }
+      prevFightMonster = fight ? fight.monsterId : null;
       if (fight && fight.entityUid === undefined) {
         if (bossFor !== fight.monsterId) {
           if (bossModel) scene.remove(bossModel.group);

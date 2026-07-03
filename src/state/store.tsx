@@ -219,6 +219,7 @@ function monsterAttacks(s: GameState, m: Monster) {
     const dmg = reduceIncoming(s, 1 + Math.floor(Math.random() * m.maxHit));
     s.currentHp -= dmg;
     s.stats.damageTaken += dmg;
+    grantXp(s, 'hitpoints', dmg * 2); // taking hits toughens you
     pushFx(s, 'player', dmg);
     pushLog(s, `${m.icon} ${m.name} hits you for ${dmg}.`, 'combat');
   } else {
@@ -294,7 +295,7 @@ function playerAttacks(s: GameState, m: Monster): boolean {
     } else {
       grantXp(s, o.style === 'ranged' ? 'ranged' : 'magic', dmg * 4);
     }
-    grantXp(s, 'hitpoints', Math.floor(dmg * 1.33));
+    grantXp(s, 'hitpoints', Math.ceil(dmg * 1.33));
   }
   if (s.activity.monsterHp <= 0) {
     const slainUid = s.activity.entityUid;
@@ -307,26 +308,10 @@ function playerAttacks(s: GameState, m: Monster): boolean {
       const ent = s.world.entities.find((e) => e.uid === slainUid);
       if (ent) ent.respawn = ENTITY_RESPAWN_TICKS;
     }
-    // Chain combat (opt-in): re-engage the nearest surviving monster of the same kind
-    let next: number | undefined;
-    if (!m.boss && s.autoCombat && s.settings.chainCombat) {
-      let best = 99;
-      for (const e of s.world.entities) {
-        if (e.defId !== m.id || e.respawn > 0 || e.uid === slainUid) continue;
-        const d = cheb(e.x, e.y, s.world.px, s.world.py);
-        if (d <= 5 && d < best) {
-          best = d;
-          next = e.uid;
-        }
-      }
-    }
-    if (next !== undefined) {
-      s.activity = { type: 'combat', monsterId: m.id, monsterHp: m.hp, entityUid: next };
-      pushLog(s, `You turn to face another ${m.name}.`, 'combat');
-    } else {
-      s.activity = null;
-      if (m.boss) s.autoCombat = false;
-    }
+    // Auto-attack chasing is handled by the world view: it walks the player
+    // to the next monster of the same kind and engages on arrival.
+    s.activity = null;
+    if (m.boss) s.autoCombat = false;
     return true;
   }
   return false;

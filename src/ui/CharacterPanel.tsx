@@ -111,7 +111,7 @@ export default function CharacterPanel() {
             checked={s.settings.chainCombat}
             onChange={(e) => dispatch({ type: 'SET_SETTINGS', patch: { chainCombat: e.target.checked } })}
           />
-          Auto-attack: after a kill, automatically engage the nearest monster of the same kind
+          Auto-attack: after a kill, run to the nearest monster of the same kind and attack it
         </label>
         <p className="muted small">
           Offline progress: gathering, thieving and crafting continue for up to 6 hours while the
