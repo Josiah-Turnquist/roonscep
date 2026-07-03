@@ -470,13 +470,20 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
 
   // ——— decorative filler: pure scenery, instanced per type, never clickable ———
   // (not in pickables, so clicks and hovers pass straight through)
+  // squat, rounded shapes only: anything cone-shaped reads as a "mini tree"
+  // that players expect to block them — these are all pure walk-through scenery
+  const shrubGeo = new THREE.SphereGeometry(0.2, 6, 5);
+  shrubGeo.scale(1, 0.6, 1);
+  const snowShrubGeo = new THREE.SphereGeometry(0.24, 6, 5);
+  snowShrubGeo.scale(1, 0.55, 1);
+  const tuftGeo = new THREE.ConeGeometry(0.09, 0.14, 5); // squat grass, not a sapling
   const DECOR: { chars: string; density: number; geo: THREE.BufferGeometry; color: number; yOff: number }[] = [
-    { chars: '.', density: 0.09, geo: new THREE.ConeGeometry(0.07, 0.22, 5), color: 0x3a6b28, yOff: 0.1 }, // grass tufts
-    { chars: '.', density: 0.012, geo: new THREE.ConeGeometry(0.16, 0.34, 6), color: 0x2f5a22, yOff: 0.16 }, // ferns
+    { chars: '.', density: 0.09, geo: tuftGeo, color: 0x3a6b28, yOff: 0.07 }, // grass tufts
+    { chars: '.', density: 0.02, geo: shrubGeo, color: 0x2f5a22, yOff: 0.11 }, // shrubs
     { chars: '.', density: 0.008, geo: new THREE.SphereGeometry(0.05, 6, 5), color: 0xe8e0d0, yOff: 0.06 }, // white flowers
     { chars: '.', density: 0.006, geo: new THREE.SphereGeometry(0.05, 6, 5), color: 0xd9ab4f, yOff: 0.06 }, // gold flowers
     { chars: '.:;', density: 0.012, geo: new THREE.IcosahedronGeometry(0.09, 0), color: 0x8a8378, yOff: 0.05 }, // pebbles
-    { chars: '*', density: 0.02, geo: new THREE.ConeGeometry(0.3, 1.0, 6), color: 0x4a6b52, yOff: 0.5 }, // snow pines
+    { chars: '*', density: 0.02, geo: snowShrubGeo, color: 0x4a6b52, yOff: 0.11 }, // hardy snow shrubs
     { chars: '*', density: 0.012, geo: new THREE.IcosahedronGeometry(0.16, 0), color: 0xeef2f5, yOff: 0.08 }, // ice boulders
     { chars: '_', density: 0.03, geo: new THREE.CylinderGeometry(0.015, 0.022, 0.6, 4), color: 0x5a6b4a, yOff: 0.3 }, // reeds
     { chars: '_', density: 0.008, geo: new THREE.CylinderGeometry(0.04, 0.1, 1.0, 5), color: 0x3a352c, yOff: 0.5 }, // dead snags
