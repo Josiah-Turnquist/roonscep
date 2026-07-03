@@ -35,7 +35,7 @@ export default function InventoryPanel() {
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>🎒 Inventory & Equipment</h2>
+        <h2>Inventory & Equipment</h2>
         <p className="muted small">
           Totals: +{b.attack} att · +{b.strength} str · +{b.ranged} rng · +{b.magic} mag · +{b.defence} def
         </p>

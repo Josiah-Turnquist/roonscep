@@ -11,6 +11,12 @@ import { buildWorld, tilePos, WorldHandles } from './three/worldBuilder';
 import { buildMonsterModel, buildPlayerModel, CharModel } from './three/models';
 import { NpcDialog, StationDialog } from './Dialogs';
 import CombatHud from './CombatHud';
+import TickBar from './TickBar';
+
+/** 0→1→0 attack-lunge envelope over 260ms. */
+function lungePulse(msSince: number): number {
+  return msSince >= 0 && msSince < 260 ? Math.sin((msSince / 260) * Math.PI) : 0;
+}
 
 // ——— tile pathfinding (identical rules to the reducer) ———
 
@@ -261,6 +267,8 @@ export default function WorldView() {
     const splats: Splat[] = [];
     const markers: { mesh: THREE.Mesh; born: number }[] = [];
     let lastFxId = stateRef.current.fx.reduce((m, f) => Math.max(m, f.id), 0);
+    let playerSwungAt = -1000;
+    let foeSwungAt = -1000;
 
     // camera state
     const cam = camRef.current;
@@ -590,10 +598,18 @@ export default function WorldView() {
         bossModel = null;
         bossFor = null;
       }
-      // face your opponent
+      // face your opponent; lunge on each swing
+      player.rotation.x = -lungePulse(now - playerSwungAt) * 0.3;
       if (fight) {
         const ft = fightTargetPos(st);
         if (ft) faceTowards(player, ft, dt);
+        const foePulse = -lungePulse(now - foeSwungAt) * 0.3;
+        if (fight.entityUid !== undefined) {
+          const em = entityModels.get(fight.entityUid);
+          if (em) em.group.rotation.x = foePulse;
+        } else if (bossModel) {
+          bossModel.group.rotation.x = foePulse;
+        }
       }
       const tpos = fight ? fightTargetPos(st) : null;
       if (fight && tpos) {
@@ -616,6 +632,9 @@ export default function WorldView() {
       for (const fx of st.fx) {
         if (fx.id <= lastFxId) continue;
         lastFxId = fx.id;
+        // whoever dealt this hit lunges forward
+        if (fx.target === 'monster') playerSwungAt = now;
+        else foeSwungAt = now;
         const base = fx.target === 'player' ? player.position : tpos ?? player.position;
         const sp = makeSplatSprite(fx.amount);
         sp.position.set(
@@ -703,7 +722,8 @@ export default function WorldView() {
       </button>
       {s.activity && s.activity.type !== 'combat' && (
         <button className="activity-chip" onClick={() => dispatch({ type: 'STOP' })} title="Click to stop">
-          {activityLabel(s)}
+          <span>{activityLabel(s)}</span>
+          <TickBar />
         </button>
       )}
       <CombatHud />

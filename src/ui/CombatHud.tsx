@@ -6,6 +6,7 @@ import { useDispatch, useGame } from '../state/store';
 import {
   lvl, maxHp, maxPrayerPoints, monsterHitChance, playerHitChance, playerMaxHit, playerStyle,
 } from '../game/combat';
+import TickBar from './TickBar';
 
 const STYLES: { id: AttackStyle; icon: string; hint: string }[] = [
   { id: 'accurate', icon: '🎯', hint: 'Accurate — Attack xp' },
@@ -29,6 +30,7 @@ export default function CombatHud() {
 
   return (
     <div className="combat-hud">
+      {s.autoCombat && <TickBar className="hud-tick" />}
       <div className="hud-row hud-bars">
         <div className="hud-bar-block">
           <div className="hud-label">
@@ -57,20 +59,20 @@ export default function CombatHud() {
         </button>
         <button
           className={`btn ${s.autoCombat ? 'active-toggle' : ''}`}
-          title="Auto-retaliate each turn"
+          title="Swing automatically every turn"
           onClick={() => dispatch({ type: 'TOGGLE_AUTO' })}
         >
-          🔁 {s.autoCombat ? 'Auto' : 'Manual'}
+          Retaliate: {s.autoCombat ? 'on' : 'off'}
         </button>
         <button className="btn danger" onClick={() => dispatch({ type: 'FLEE' })}>
-          🏃 Flee
+          Flee
         </button>
         <button
           className={`btn small ${s.settings.chainCombat ? 'active-toggle' : ''}`}
-          title="Chain combat: after a kill, automatically engage the nearest monster of the same kind"
+          title="After a kill, automatically engage the nearest monster of the same kind"
           onClick={() => dispatch({ type: 'SET_SETTINGS', patch: { chainCombat: !s.settings.chainCombat } })}
         >
-          ⛓️ Chain
+          Auto-attack
         </button>
         {playerStyle(s) === 'melee' &&
           STYLES.map((st) => (

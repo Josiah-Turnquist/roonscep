@@ -19,7 +19,7 @@ export default function SlayerPanel() {
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>💀 Slayer</h2>
+        <h2>Slayer</h2>
         <p className="muted small">
           Level {levelForXp(s.xp.slayer)} · <strong>{s.slayerPoints}</strong> points. Visit a
           master in the world for a contract; hunt the target (⭐ ring) for Slayer xp.

@@ -12,7 +12,7 @@ export default function ShopPanel() {
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>🛒 General Store</h2>
+        <h2>General Store</h2>
         <p className="muted">
           Starter gear, food and potions. You have 🪙 {s.gold.toLocaleString()} gold. Sell your own
           loot from the Inventory tab.
@@ -45,7 +45,7 @@ export default function ShopPanel() {
         })}
       </div>
 
-      <h3 className="section-title">🧣 Capes of Accomplishment</h3>
+      <h3 className="section-title">Capes of Accomplishment</h3>
       {maxedSkills.length === 0 ? (
         <p className="muted small">
           Reach level 99 in a skill and the Cape Merchant will sell you its cape (99,000 gold).

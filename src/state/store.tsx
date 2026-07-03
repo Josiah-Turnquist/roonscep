@@ -23,6 +23,8 @@ import {
 } from '../game/world';
 
 export const TICK_MS = 1200;
+/** Wall-clock time of the last game tick — lets the UI show progress toward the next turn. */
+export const tickClock = { last: Date.now() };
 // Legacy key from when the game was called Skillbound — kept so nobody loses their save.
 export const SAVE_KEY = 'skillbound-save-v1';
 const LOG_LIMIT = 80;
@@ -970,7 +972,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reduce, undefined, loadState);
 
   useEffect(() => {
-    const id = setInterval(() => dispatch({ type: 'TICK' }), TICK_MS);
+    tickClock.last = Date.now();
+    const id = setInterval(() => {
+      tickClock.last = Date.now();
+      dispatch({ type: 'TICK' });
+    }, TICK_MS);
     return () => clearInterval(id);
   }, []);
 

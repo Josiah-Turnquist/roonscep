@@ -53,7 +53,7 @@ function PrayerPanel() {
 
   return (
     <>
-      <h3 className="section-title">⚰️ Bury Bones</h3>
+      <h3 className="section-title">Bury Bones</h3>
       {bones.length === 0 ? (
         <p className="muted small">No bones in your bag. Monsters drop them generously.</p>
       ) : (
@@ -82,7 +82,7 @@ function PrayerPanel() {
         </div>
       )}
       <h3 className="section-title">
-        🙏 Prayers <span className="muted small">({s.prayerPoints}/{maxPrayerPoints(s)})</span>
+        Prayers <span className="muted small">({s.prayerPoints}/{maxPrayerPoints(s)})</span>
       </h3>
       <div className="side-card-list">
         {PRAYERS.map((p) => {

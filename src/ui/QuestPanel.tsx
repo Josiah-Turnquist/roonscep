@@ -22,7 +22,7 @@ export default function QuestPanel() {
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>📜 Quest Journal</h2>
+        <h2>Quest Journal</h2>
         <p className="muted small">
           {done}/{QUESTS.length} complete. Quests are given and turned in by folk in the world —
           look for the gold “!”.

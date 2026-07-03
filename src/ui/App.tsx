@@ -70,7 +70,8 @@ export default function App() {
                   if (t.id === 'skills') setSelectedSkill(null);
                 }}
               >
-                {t.icon}
+                <span className="side-tab-icon">{t.icon}</span>
+                <span className="side-tab-label">{t.label}</span>
               </button>
             ))}
           </nav>

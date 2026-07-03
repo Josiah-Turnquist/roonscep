@@ -54,13 +54,13 @@ export default function CharacterPanel() {
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>🧙 Character</h2>
+        <h2>Character</h2>
         <p className="muted">
           Achievements: {s.achievements.length}/{ACHIEVEMENTS.length}
         </p>
       </div>
 
-      <h3 className="section-title">🏅 Achievements</h3>
+      <h3 className="section-title">Achievements</h3>
       <div className="ach-grid">
         {ACHIEVEMENTS.map((a) => {
           const earned = s.achievements.includes(a.id);
@@ -74,7 +74,7 @@ export default function CharacterPanel() {
         })}
       </div>
 
-      <h3 className="section-title">📊 Statistics</h3>
+      <h3 className="section-title">Statistics</h3>
       <div className="stats-grid">
         {STAT_ROWS.map((r) => (
           <div key={r.key} className="stat-row">
@@ -84,7 +84,7 @@ export default function CharacterPanel() {
         ))}
       </div>
 
-      <h3 className="section-title">⚙️ Settings</h3>
+      <h3 className="section-title">Settings</h3>
       <div className="settings">
         <label className="setting-row">
           <input
@@ -111,7 +111,7 @@ export default function CharacterPanel() {
             checked={s.settings.chainCombat}
             onChange={(e) => dispatch({ type: 'SET_SETTINGS', patch: { chainCombat: e.target.checked } })}
           />
-          Chain combat: after a kill, automatically engage the nearest monster of the same kind
+          Auto-attack: after a kill, automatically engage the nearest monster of the same kind
         </label>
         <p className="muted small">
           Offline progress: gathering, thieving and crafting continue for up to 6 hours while the
@@ -119,7 +119,7 @@ export default function CharacterPanel() {
         </p>
         <div className="save-tools">
           <button className="btn" onClick={exportSave}>
-            {copied ? '✓ Copied!' : '📤 Export save to clipboard'}
+            {copied ? '✓ Copied!' : 'Export save to clipboard'}
           </button>
         </div>
         <div className="save-tools">
@@ -131,7 +131,7 @@ export default function CharacterPanel() {
             rows={3}
           />
           <button className="btn" disabled={!importText.trim()} onClick={importSave}>
-            📥 Import save
+            Import save
           </button>
         </div>
         <button
@@ -140,7 +140,7 @@ export default function CharacterPanel() {
             if (window.confirm('Erase all progress and start over?')) dispatch({ type: 'RESET' });
           }}
         >
-          🗑️ New Game
+          New Game
         </button>
       </div>
     </div>
