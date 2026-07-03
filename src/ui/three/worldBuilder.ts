@@ -350,6 +350,14 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
           ring.rotation.x = -Math.PI / 2;
           ring.position.y = 0.06;
           full.add(ring);
+          // invisible disc so clicking anywhere inside the ring works, not just the band
+          const hitDisc = new THREE.Mesh(
+            new THREE.CircleGeometry(0.6, 12),
+            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+          );
+          hitDisc.rotation.x = -Math.PI / 2;
+          hitDisc.position.y = 0.07;
+          full.add(hitDisc);
           const phase = hash(seed, 5) * Math.PI * 2;
           animated.push((t) => {
             const sc = 1 + Math.sin(t * 2.2 + phase) * 0.18;
