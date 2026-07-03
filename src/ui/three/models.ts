@@ -285,14 +285,17 @@ function buildCow(): CharModel {
   udder.scale.y = 0.65;
   udder.position.set(-0.12, bodyY - 0.24, 0);
   g.add(udder);
-  // tail hangs down with a tuft
-  const tail = cyl(0.018, 0.025, 0.36, hide);
-  tail.position.set(-0.42, bodyY - 0.05, 0);
-  tail.rotation.z = 0.18;
+  // tail pivots at the rump, hangs down to a tuft; only the tip swings
+  const tailGeo = new THREE.CylinderGeometry(0.025, 0.015, 0.36, 6);
+  tailGeo.translate(0, -0.18, 0);
+  const tail = new THREE.Mesh(tailGeo, mat(hide));
+  tail.castShadow = true;
+  tail.position.set(-0.4, bodyY + 0.12, 0);
+  tail.rotation.z = -0.25;
+  const tuft = sphere(0.045, 0x2b2b2b);
+  tuft.position.set(0, -0.38, 0);
+  tail.add(tuft);
   g.add(tail);
-  const tuft = sphere(0.04, 0x2b2b2b);
-  tuft.position.set(-0.45, bodyY - 0.24, 0);
-  g.add(tuft);
 
   const legs: THREE.Mesh[] = [];
   for (const [lx, lz] of [[-0.28, -0.13], [-0.28, 0.13], [0.28, -0.13], [0.28, 0.13]] as const) {
@@ -348,10 +351,14 @@ function buildRat(): CharModel {
     eye.position.set(0.42, bodyY + 0.08, side * 0.07);
     g.add(eye);
   }
-  // long thin tail trailing behind, close to the ground
-  const tail = cyl(0.01, 0.022, 0.55, 0xc4a090);
-  tail.position.set(-0.6, bodyY - 0.06, 0);
-  tail.rotation.z = Math.PI / 2 - 0.18;
+  // long thin tail anchored at the rump, trailing behind near the ground;
+  // pivoting at the base means the wag moves the tip, not the butt
+  const tailGeo = new THREE.CylinderGeometry(0.022, 0.008, 0.55, 6);
+  tailGeo.translate(0, -0.275, 0);
+  const tail = new THREE.Mesh(tailGeo, mat(0xc4a090));
+  tail.castShadow = true;
+  tail.position.set(-0.32, bodyY - 0.02, 0);
+  tail.rotation.z = -(Math.PI / 2 - 0.12);
   g.add(tail);
 
   const legs: THREE.Mesh[] = [];
