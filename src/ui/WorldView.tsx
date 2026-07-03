@@ -210,7 +210,8 @@ export default function WorldView() {
     scene.background = new THREE.Color(0x8fb2d4);
     scene.fog = new THREE.Fog(0x8fb2d4, 28, 62);
 
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+    // far plane sits just past the fog wall so the GPU hard-culls the distance
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 90);
 
     scene.add(new THREE.HemisphereLight(0xdfeaff, 0x3a4a2c, 0.95));
     const sun = new THREE.DirectionalLight(0xfff2d0, 1.35);
@@ -571,8 +572,17 @@ export default function WorldView() {
         const model = entityModels.get(e.uid);
         if (!model) continue;
         const alive = e.respawn === 0;
-        model.group.visible = alive;
+        // far monsters are beyond the fog: hide them, snap them into place,
+        // and skip all their movement/animation work
+        const ddx = e.x - st.world.px;
+        const ddy = e.y - st.world.py;
+        const far = ddx * ddx + ddy * ddy > 45 * 45;
+        model.group.visible = alive && !far;
         if (!alive) continue;
+        if (far) {
+          model.group.position.copy(tilePos(e.x, e.y));
+          continue;
+        }
         // stagger: react to a new logical tile only after a personal delay
         let rec = entityMove.get(e.uid);
         if (!rec || rec.tx !== e.x || rec.ty !== e.y) {
@@ -734,8 +744,12 @@ export default function WorldView() {
         }
       }
 
-      // world animations
-      for (const fn of world.animated) fn(t);
+      // world animations — only tick what is near enough to ever be seen
+      for (const a of world.animated) {
+        const adx = a.x - st.world.px;
+        const ady = a.y - st.world.py;
+        if (adx * adx + ady * ady < 2500) a.tick(t);
+      }
 
       // hover hint
       if (lastMouse && !dragging) {

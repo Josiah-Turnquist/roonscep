@@ -240,20 +240,29 @@ export interface NodeVisual {
   depleted: THREE.Object3D;
 }
 
+export interface AnimatedEntry {
+  /** Tile position, used to skip animation far from the player. */
+  x: number;
+  y: number;
+  /** The animated subtree — kept matrix-live while the rest of the world is frozen. */
+  obj: THREE.Object3D;
+  tick: (t: number) => void;
+}
+
 export interface WorldHandles {
   /** Raycast targets: terrain + every interactable object (userData.kind set). */
   pickables: THREE.Object3D[];
   interactables: THREE.Group;
   overlay: THREE.Group; // labels etc, not pickable
   nodeVisuals: Map<string, NodeVisual>;
-  animated: ((t: number) => void)[];
+  animated: AnimatedEntry[];
 }
 
 export function buildWorld(scene: THREE.Scene): WorldHandles {
   const interactables = new THREE.Group();
   const overlay = new THREE.Group();
   const nodeVisuals = new Map<string, NodeVisual>();
-  const animated: ((t: number) => void)[] = [];
+  const animated: AnimatedEntry[] = [];
 
   // — terrain —
   const geo = new THREE.PlaneGeometry(MAP_W, MAP_H, MAP_W, MAP_H);
@@ -361,9 +370,12 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
           hitDisc.position.y = 0.07;
           full.add(hitDisc);
           const phase = hash(seed, 5) * Math.PI * 2;
-          animated.push((t) => {
-            const sc = 1 + Math.sin(t * 2.2 + phase) * 0.18;
-            ring.scale.set(sc, sc, 1);
+          animated.push({
+            x, y, obj: ring,
+            tick: (t) => {
+              const sc = 1 + Math.sin(t * 2.2 + phase) * 0.18;
+              ring.scale.set(sc, sc, 1);
+            },
           });
           full.position.set(p.x, -0.22, p.z);
           depleted = new THREE.Group(); // fishing spots never deplete
@@ -409,9 +421,7 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
         );
         void_.position.y = 0.85;
         g.add(void_);
-        animated.push((t) => {
-          g.rotation.y = t * 0.4;
-        });
+        animated.push({ x, y, obj: g, tick: (t) => (g.rotation.y = t * 0.4) });
         g.position.copy(p);
         const data = { kind: 'lair', bossId, label: `${boss.icon} ${boss.name} (combat ${boss.levelReq}+)` };
         g.userData = data;
@@ -437,16 +447,19 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
     interactables.add(model.group);
     // idle animation so townsfolk never stand frozen
     const npcPhase = hash(n.x, n.y) * 20;
-    animated.push((t) => model.update(0.016, t + npcPhase, 0, false));
+    animated.push({ x: n.x, y: n.y, obj: model.group, tick: (t) => model.update(0.016, t + npcPhase, 0, false) });
     const label = makeTextSprite(n.name, '#ffe873', 0.3);
     label.position.set(p.x, p.y + 1.5, p.z);
     overlay.add(label);
     if (n.kind === 'quest') {
       const marker = solid(new THREE.OctahedronGeometry(0.12, 0), 0xe8b64c, { emissive: 0xe8b64c, ei: 0.9 });
       marker.position.set(p.x, p.y + 1.75, p.z);
-      animated.push((t) => {
-        marker.position.y = p.y + 1.75 + Math.sin(t * 2.5 + n.x) * 0.09;
-        marker.rotation.y = t * 1.5;
+      animated.push({
+        x: n.x, y: n.y, obj: marker,
+        tick: (t) => {
+          marker.position.y = p.y + 1.75 + Math.sin(t * 2.5 + n.x) * 0.09;
+          marker.rotation.y = t * 1.5;
+        },
       });
       overlay.add(marker);
     }
@@ -454,6 +467,20 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
 
   scene.add(interactables);
   scene.add(overlay);
+
+  // The world is static: freeze every matrix so three.js stops recomposing
+  // thousands of unchanged transforms per frame. Animated subtrees are
+  // re-enabled and are only ticked near the player (see WorldView).
+  for (const root of [terrain, water, walls, interactables, overlay] as THREE.Object3D[]) {
+    root.traverse((o) => {
+      o.matrixAutoUpdate = false;
+      o.updateMatrix();
+    });
+  }
+  for (const a of animated) {
+    a.obj.traverse((o) => (o.matrixAutoUpdate = true));
+  }
+  scene.updateMatrixWorld(true);
 
   return { pickables: [terrain, interactables], interactables, overlay, nodeVisuals, animated };
 }
