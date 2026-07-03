@@ -47,7 +47,7 @@ export default function CharacterPanel() {
       localStorage.setItem(SAVE_KEY, importText);
       window.location.reload();
     } catch {
-      alert('That does not look like a valid Skillbound save.');
+      alert('That does not look like a valid Roonscep save.');
     }
   };
 

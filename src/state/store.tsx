@@ -23,6 +23,7 @@ import {
 } from '../game/world';
 
 export const TICK_MS = 1200;
+// Legacy key from when the game was called Skillbound — kept so nobody loses their save.
 export const SAVE_KEY = 'skillbound-save-v1';
 const LOG_LIMIT = 80;
 const MAX_OFFLINE_TICKS = 18000; // 6 hours
@@ -103,7 +104,7 @@ function initialState(): GameState {
     achievements: [],
     stats: { ...ZERO_STATS },
     settings: { autoEat: true, autoEatThreshold: 0.4, chainCombat: false },
-    log: [{ id: 0, text: 'Welcome to Skillbound! Click the ground to walk (WASD works too), drag or press Q/E to spin the camera, and click trees, rocks, folk and monsters to act on them.', kind: 'info' }],
+    log: [{ id: 0, text: 'Welcome to Roonscep! Click the ground to walk (WASD works too), drag or press Q/E to spin the camera, and click trees, rocks, folk and monsters to act on them.', kind: 'info' }],
     logCounter: 1,
     fx: [],
   };

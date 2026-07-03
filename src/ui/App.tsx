@@ -35,7 +35,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1 className="brand">⚔️ Skillbound</h1>
+        <h1 className="brand">⚔️ Roonscep</h1>
         <div className="header-stats">
           {task && (
             <button className="task-chip" title="Current slayer task" onClick={() => setTab('slayer')}>
