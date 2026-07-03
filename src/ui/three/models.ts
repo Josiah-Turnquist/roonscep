@@ -216,14 +216,19 @@ export function buildHumanoid(o: HumanoidOpts): CharModel {
   g.scale.setScalar(scale);
 
   const update = (dt: number, t: number, moving: number, working: boolean) => {
+    const idle = 1 - moving;
     const swing = Math.sin(t * 8) * 0.55 * moving;
     if (!o.robe) {
       lLeg.rotation.x = swing;
       rLeg.rotation.x = -swing;
     }
-    lArm.rotation.x = -swing * 0.8;
-    rArm.rotation.x = working ? -0.6 + Math.sin(t * 9) * 0.85 : swing * 0.8;
-    body.position.y = Math.abs(Math.sin(t * 8)) * 0.035 * moving;
+    // standing creatures breathe and sway so they never look frozen
+    const idleArm = Math.sin(t * 1.7) * 0.07 * idle;
+    lArm.rotation.x = -swing * 0.8 + idleArm;
+    rArm.rotation.x = working ? -0.6 + Math.sin(t * 9) * 0.85 : swing * 0.8 - idleArm;
+    body.position.y =
+      Math.abs(Math.sin(t * 8)) * 0.035 * moving + Math.sin(t * 2.1) * 0.013 * idle;
+    body.rotation.z = Math.sin(t * 1.3) * 0.02 * idle;
   };
 
   return { group: g, update };
@@ -298,13 +303,18 @@ function buildCow(): CharModel {
   }
 
   faceForward(g, 1);
+  const headBaseY = head.position.y;
   const update = (_dt: number, t: number, moving: number) => {
+    const idle = 1 - moving;
     const swing = Math.sin(t * 7) * 0.4 * moving;
     legs[0].rotation.x = swing;
     legs[3].rotation.x = swing;
     legs[1].rotation.x = -swing;
     legs[2].rotation.x = -swing;
     tail.rotation.x = Math.sin(t * 2.2) * 0.3;
+    // graze: the head slowly dips toward the grass while standing
+    head.position.y = headBaseY + (Math.sin(t * 0.8) - 1) * 0.06 * idle;
+    body.position.y = bodyY + Math.sin(t * 1.9) * 0.01 * idle;
   };
   return { group: g, update };
 }
@@ -354,12 +364,15 @@ function buildRat(): CharModel {
 
   faceForward(g, 0.85);
   const update = (_dt: number, t: number, moving: number) => {
+    const idle = 1 - moving;
     const scurry = Math.sin(t * 16) * 0.6 * moving;
     legs[0].rotation.x = scurry;
     legs[3].rotation.x = scurry;
     legs[1].rotation.x = -scurry;
     legs[2].rotation.x = -scurry;
     tail.rotation.y = Math.sin(t * 4) * 0.3;
+    // quick nervous breathing while standing
+    body.scale.y = 0.85 + Math.sin(t * 5.5) * 0.025 * idle;
   };
   return { group: g, update };
 }

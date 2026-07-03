@@ -433,6 +433,9 @@ export function buildWorld(scene: THREE.Scene): WorldHandles {
     model.group.userData = data;
     model.group.traverse((o) => (o.userData = data));
     interactables.add(model.group);
+    // idle animation so townsfolk never stand frozen
+    const npcPhase = hash(n.x, n.y) * 20;
+    animated.push((t) => model.update(0.016, t + npcPhase, 0, false));
     const label = makeTextSprite(n.name, '#ffe873', 0.3);
     label.position.set(p.x, p.y + 1.5, p.z);
     overlay.add(label);

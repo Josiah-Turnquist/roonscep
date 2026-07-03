@@ -78,8 +78,9 @@ type DialogState =
 /** Visual walk speed in tiles/sec — this IS the pace; steps are consumed as the model arrives. */
 const PLAYER_SPEED = 3.4;
 const MONSTER_SPEED = 1.6;
-/** Dispatch the next path step when the model is this close to its current tile. */
-const STEP_TRIGGER = 0.28;
+/** Dispatch the next path step this far before arrival — generous, so state-update
+ * latency can never leave the model standing still mid-path. */
+const STEP_TRIGGER = 0.6;
 
 /** Move at constant speed toward target; returns remaining distance. */
 function moveTowards(obj: THREE.Object3D, target: THREE.Vector3, speed: number, dt: number): number {
@@ -90,8 +91,8 @@ function moveTowards(obj: THREE.Object3D, target: THREE.Vector3, speed: number, 
     return 0;
   }
   if (dist > 1e-4) {
-    // catch up faster when trailing badly (e.g. long diagonal chains)
-    const boosted = speed * (1 + Math.max(0, dist - 1.2));
+    // catch up faster only when trailing badly, so normal walking stays even-paced
+    const boosted = speed * (1 + Math.max(0, dist - 1.8));
     const step = Math.min(dist, boosted * dt);
     obj.position.add(delta.multiplyScalar(step / dist));
   }
@@ -233,7 +234,9 @@ export default function WorldView() {
     scene.add(player);
     let playerMoving = 0;
 
-    // monster entities
+    // monster entities — each gets a personal delay before acting on a new tile,
+    // so a world tick never moves the whole zone in lockstep
+    const entityMove = new Map<number, { tx: number; ty: number; at: number }>();
     const entityModels = new Map<number, CharModel>();
     for (const e of st0.world.entities) {
       const def = MONSTER_MAP[e.defId];
@@ -561,14 +564,22 @@ export default function WorldView() {
         const alive = e.respawn === 0;
         model.group.visible = alive;
         if (!alive) continue;
+        // stagger: react to a new logical tile only after a personal delay
+        let rec = entityMove.get(e.uid);
+        if (!rec || rec.tx !== e.x || rec.ty !== e.y) {
+          rec = { tx: e.x, ty: e.y, at: now + ((e.uid * 173 + e.x * 31 + e.y * 57) % 850) };
+          entityMove.set(e.uid, rec);
+        }
+        const mayMove = now >= rec.at;
         const etarget = tilePos(e.x, e.y);
-        const erem = moveTowards(model.group, etarget, MONSTER_SPEED, dt);
+        let erem = 0;
+        if (mayMove) erem = moveTowards(model.group, etarget, MONSTER_SPEED, dt);
         if (e.uid === fightingUid) {
           faceTowards(model.group, player.position, dt);
-        } else if (erem > 0.02) {
+        } else if (mayMove && erem > 0.02) {
           faceTowards(model.group, etarget, dt);
         }
-        model.update(dt, t + e.uid * 0.77, Math.min(1, erem * 4), false);
+        model.update(dt, t + e.uid * 0.77, mayMove ? Math.min(1, erem * 4) : 0, false);
       }
 
       // node depletion swaps
@@ -709,17 +720,7 @@ export default function WorldView() {
     <div className="world-wrap" ref={containerRef}>
       <div className="zone-label">{zoneName(s.world.px, s.world.py)}</div>
       {hover && <div className="hover-chip">{hover}</div>}
-      <button
-        className="compass-btn"
-        title="Reset camera — drag, arrow keys or Q/E to rotate, scroll to zoom"
-        onClick={() => {
-          camRef.current.yaw = 0.2;
-          camRef.current.pitch = 0.95;
-          camRef.current.dist = 13;
-        }}
-      >
-        🧭
-      </button>
+      <CompassButton camRef={camRef} />
       {s.activity && s.activity.type !== 'combat' && (
         <button className="activity-chip" onClick={() => dispatch({ type: 'STOP' })} title="Click to stop">
           <span>{activityLabel(s)}</span>
@@ -745,4 +746,38 @@ function activityLabel(s: GameState): string {
   if (s.activity?.type === 'thieve') return '🎭 Pickpocketing…';
   if (s.activity?.type === 'craft') return '🔨 Working…';
   return '';
+}
+
+/** A live compass: the rose tracks camera yaw so N always points at world north.
+ * Clicking resets the orientation — zoom is left alone. */
+function CompassButton({
+  camRef,
+}: {
+  camRef: React.MutableRefObject<{ yaw: number; pitch: number; dist: number }>;
+}) {
+  const roseRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      if (roseRef.current) roseRef.current.style.transform = `rotate(${camRef.current.yaw}rad)`;
+    };
+    loop();
+    return () => cancelAnimationFrame(raf);
+  }, [camRef]);
+  return (
+    <button
+      className="compass-btn"
+      title="Face north — drag, arrow keys or Q/E to rotate, scroll to zoom"
+      onClick={() => {
+        camRef.current.yaw = 0;
+        camRef.current.pitch = 0.95;
+      }}
+    >
+      <span ref={roseRef} className="compass-rose">
+        <span className="compass-n">N</span>
+        <span className="compass-needle" />
+      </span>
+    </button>
+  );
 }

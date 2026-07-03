@@ -1026,3 +1026,33 @@ button {
     width: 300px;
   }
 }
+
+/* live compass rose */
+.compass-rose {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+.compass-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 20px;
+  margin: -10px 0 0 -3.5px;
+  background: linear-gradient(180deg, #e05548 0%, #e05548 50%, #d8cfb8 50%, #d8cfb8 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.compass-n {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  line-height: 1;
+}
