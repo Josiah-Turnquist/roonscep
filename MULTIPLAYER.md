@@ -40,10 +40,19 @@ Two properties of Roonscep make an authoritative MMO far easier than usual:
   now just the React/browser binding (localStorage, tick interval, hooks).
   Verified: the engine runs headless in Node, and the browser game is unchanged.
 
-- **Phase 1 — Room + auth + persistence.** A Colyseus room holds authoritative
-  state and runs the 1.2s tick server-side. Accounts (email/OAuth); load each
-  player's character from Postgres on join, save on tick/disconnect. localStorage
-  stops being truth.
+- **Phase 1 — Authoritative Colyseus room. ✅ CORE DONE (runs locally).**
+  `server/` is a Node/Colyseus package. `RoonscepRoom` gives each connected
+  player a server-owned GameState, runs the 1.2s tick server-side via the shared
+  engine, applies client intents through `reduce` (rejecting server-only actions
+  like TICK), broadcasts presence (everyone's position/appearance), and persists
+  per-player saves. Persistence is behind an interface (`FilePersistence` for
+  dev; Neon Postgres swaps in for prod). Verified end-to-end with a headless
+  test client: join → authoritative state → MOVE intent applied server-side →
+  world ticks → save persists on leave. Run: `cd server && npm run dev`, then
+  `npm run test:client`.
+  Still ahead in Phase 1: real accounts/auth (deferred — needs a provider; dev
+  uses a passed playerId), Neon Postgres impl (needs the account), and the Fly
+  deploy. None block local development.
 
 - **Phase 2 — Intents, not mutations.** Client sends intent messages
   (`MOVE`, `GATHER {x,y}`, `ATTACK {uid}`, `BUY`, `EQUIP`…). Server validates
