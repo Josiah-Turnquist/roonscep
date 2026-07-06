@@ -109,14 +109,36 @@ second player.
    button / `VITE_MP_SERVER` env so the Netlify site offers it without the URL
    param — a small UI decision.)
 
-## Decisions still needed to go further
+## Accounts (decided + built)
 
-- **Real accounts/auth.** Today identity is a stable per-browser id
-  (`roonscep-player-id`) passed as `playerId` — fine for a friends' beta, not
-  for real accounts. Decision: email/OAuth via the same Postgres, guest names,
-  or keep the browser-id approach for now?
-- **Phase 4 shared-world rules** (before unifying monsters): can two players tag
-  the same monster? Contested resource nodes or per-player? PvP anywhere?
-- **Phase 3 timing.** The full-JSON-per-tick sync is fine for 5 players; only
-  build schema deltas + interest management if a real player count needs it.
-  Recommend: deploy first, optimize only if measured.
+Users sign up with a **username** and their character persists to it — sign in
+with the same name from any device to resume. Built and verified locally:
+`src/net/auth.ts` (identity), `src/ui/SignIn.tsx` (entry screen), the
+`MultiplayerGate` in store.tsx (sign-in required before connecting), a
+sign-out chip in the header. The server already keys saves by this id.
+
+Locally it's a trust-based username claim (no password) — enough to prove the
+whole loop. **Neon Auth fills this exact seam in production**: the client
+obtains a verified user id/token, the server validates it and uses it as the
+persistence key. Nothing downstream changes.
+
+Architecture note: **Neon (DB + Neon Auth) and Fly (game-server host) are
+different layers, both needed** — Neon can't run the Colyseus WebSocket process,
+Fly can't store data. Neon Auth for accounts is a good call; Fly still hosts the
+server.
+
+## Phase 4 — shared world (decided, next to build)
+
+Rules (from the owner): two players can tag the same monster; the monster
+attacks whichever tagger has the higher **combat level** (sum of fighting
+skills). Planned combat flow: monsters + nodes move from per-player GameState
+into ONE shared server world; each tick every engaged player deals their attack
+to the shared monster HP, and the monster deals one retaliation to the
+highest-combat engaged player. Loot/xp go to whoever lands the blow. This is a
+core-combat refactor — its own focused effort.
+
+## Phase 3 timing
+
+Full-JSON-per-tick sync is fine for 5 players; only build schema deltas +
+interest management if a real player count measures a problem. Deploy first,
+optimize if needed.

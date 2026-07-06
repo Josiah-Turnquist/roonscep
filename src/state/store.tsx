@@ -13,7 +13,9 @@ import {
 } from '../game/engine';
 import { connect, NetClient } from '../net/client';
 import type { PresenceView } from '../net/types';
-import { getMpConfig, MpConfig } from '../net/config';
+import { getMpServerUrl, MpConfig } from '../net/config';
+import { Account, getAccount, signIn, signOut } from '../net/auth';
+import SignIn from '../ui/SignIn';
 
 export type { Action };
 export { TICK_MS };
@@ -80,13 +82,41 @@ const DispatchCtx = createContext<React.Dispatch<Action>>(() => {});
 const PresenceCtx = createContext<PresenceView[]>([]);
 const NO_PRESENCE: PresenceView[] = [];
 
+/** Signed-in account info for the header (null in single-player). */
+interface AccountView {
+  name: string;
+  signOut: () => void;
+}
+const AccountCtx = createContext<AccountView | null>(null);
+export function useAccount(): AccountView | null {
+  return useContext(AccountCtx);
+}
+
 /** Chooses the provider: single-player (local reducer) or multiplayer (server-authoritative). */
 export function GameRoot({ children }: { children: React.ReactNode }) {
-  const [config] = useState(getMpConfig);
-  return config ? (
-    <NetGameProvider config={config}>{children}</NetGameProvider>
-  ) : (
-    <GameProvider>{children}</GameProvider>
+  const [serverUrl] = useState(getMpServerUrl);
+  if (!serverUrl) return <GameProvider>{children}</GameProvider>;
+  return <MultiplayerGate serverUrl={serverUrl}>{children}</MultiplayerGate>;
+}
+
+/** Multiplayer requires an account: show sign-in, then connect with that identity. */
+function MultiplayerGate({ serverUrl, children }: { serverUrl: string; children: React.ReactNode }) {
+  const [account, setAccount] = useState<Account | null>(getAccount);
+  if (!account) {
+    return <SignIn onSignIn={(u, n) => setAccount(signIn(u, n))} />;
+  }
+  const config: MpConfig = { url: serverUrl, playerId: account.username, name: account.name };
+  const view: AccountView = {
+    name: account.name,
+    signOut: () => {
+      signOut();
+      setAccount(null);
+    },
+  };
+  return (
+    <AccountCtx.Provider value={view}>
+      <NetGameProvider config={config}>{children}</NetGameProvider>
+    </AccountCtx.Provider>
   );
 }
 

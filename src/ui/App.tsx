@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SkillId } from '../game/types';
-import { useGame } from '../state/store';
+import { useAccount, useGame } from '../state/store';
 import { combatLevel, maxHp, maxPrayerPoints } from '../game/combat';
 import { levelForXp } from '../game/xp';
 import { MONSTER_MAP } from '../game/monsters';
@@ -27,6 +27,7 @@ export default function App() {
   const [tab, setTab] = useState<SideTab>('skills');
   const [selectedSkill, setSelectedSkill] = useState<SkillId | null>(null);
   const s = useGame();
+  const account = useAccount();
 
   const totalLevel = Object.values(s.xp).reduce((sum, xp) => sum + levelForXp(xp), 0);
   const hp = maxHp(s);
@@ -51,6 +52,11 @@ export default function App() {
           <span title="Combat level">⚔️ {combatLevel(s)}</span>
           <span title="Total level">📜 {totalLevel}</span>
           <span title="Gold">🪙 {s.gold.toLocaleString()}</span>
+          {account && (
+            <button className="account-chip" title="Sign out" onClick={account.signOut}>
+              🌐 {account.name} · sign out
+            </button>
+          )}
         </div>
       </header>
       <div className="game-layout">
