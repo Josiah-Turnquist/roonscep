@@ -9,10 +9,12 @@
     "test:client": "tsx src/test-client.ts"
   },
   "dependencies": {
-    "colyseus": "^0.15.17"
+    "colyseus": "^0.15.17",
+    "pg": "^8.11.5"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.0",
     "colyseus.js": "^0.15.26",
     "tsx": "^4.7.0",
     "typescript": "~5.6.3"

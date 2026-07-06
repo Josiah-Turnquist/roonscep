@@ -13,7 +13,7 @@ import colyseus from 'colyseus';
 const { Room } = colyseus;
 import { GameState } from '../../src/game/types.ts';
 import { Action, initialState, reduce } from '../../src/game/engine.ts';
-import { Persistence, FilePersistence } from './persistence.ts';
+import { Persistence, createPersistence } from './persistence.ts';
 
 /** Minimal structural type for the bits of a Colyseus client we use. */
 type Client = { sessionId: string; send: (type: string, message: unknown) => void };
@@ -40,7 +40,7 @@ const SAVE_EVERY_MS = 10000;
 
 export class RoonscepRoom extends Room {
   private players = new Map<string, Player>(); // keyed by client.sessionId
-  private store: Persistence = new FilePersistence();
+  private store: Persistence = createPersistence();
 
   onCreate(): void {
     // The authoritative heartbeat: every player's world ticks here, server-side.
