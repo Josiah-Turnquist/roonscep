@@ -2,13 +2,18 @@
 // environment-specific — localStorage persistence, the tick interval, and the
 // context/hooks the UI reads. The authoritative simulation lives in
 // ../game/engine and knows nothing about any of this.
-import React, { createContext, useContext, useEffect, useReducer, useRef } from 'react';
+import React, {
+  createContext, useCallback, useContext, useEffect, useReducer, useRef, useState,
+} from 'react';
 import { GameState } from '../game/types';
 import { MONSTER_MAP } from '../game/monsters';
 import { HOME, SPAWNS, WORLD_VERSION, isWalkable } from '../game/world';
 import {
   Action, MAX_OFFLINE_TICKS, TICK_MS, initialState, reduce, simulateOffline, withAchievements,
 } from '../game/engine';
+import { connect, NetClient } from '../net/client';
+import type { PresenceView } from '../net/types';
+import { getMpConfig, MpConfig } from '../net/config';
 
 export type { Action };
 export { TICK_MS };
@@ -71,6 +76,19 @@ export function loadState(): GameState {
 
 const StateCtx = createContext<GameState | null>(null);
 const DispatchCtx = createContext<React.Dispatch<Action>>(() => {});
+/** Other players, in multiplayer; always empty in single-player. */
+const PresenceCtx = createContext<PresenceView[]>([]);
+const NO_PRESENCE: PresenceView[] = [];
+
+/** Chooses the provider: single-player (local reducer) or multiplayer (server-authoritative). */
+export function GameRoot({ children }: { children: React.ReactNode }) {
+  const [config] = useState(getMpConfig);
+  return config ? (
+    <NetGameProvider config={config}>{children}</NetGameProvider>
+  ) : (
+    <GameProvider>{children}</GameProvider>
+  );
+}
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reduce, undefined, loadState);
@@ -111,7 +129,86 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <StateCtx.Provider value={state}>
-      <DispatchCtx.Provider value={dispatch}>{children}</DispatchCtx.Provider>
+      <DispatchCtx.Provider value={dispatch}>
+        <PresenceCtx.Provider value={NO_PRESENCE}>{children}</PresenceCtx.Provider>
+      </DispatchCtx.Provider>
+    </StateCtx.Provider>
+  );
+}
+
+// ——— multiplayer provider ———
+// Same context shape as GameProvider, so the entire UI is unchanged. The server
+// is authoritative: dispatch sends an intent and the truth comes back over the
+// wire. Movement is applied optimistically for responsiveness; the server's
+// state pushes reconcile it.
+
+export function NetGameProvider({ config, children }: { config: MpConfig; children: React.ReactNode }) {
+  const [state, setState] = useState<GameState | null>(null);
+  const [presence, setPresence] = useState<PresenceView[]>(NO_PRESENCE);
+  const [error, setError] = useState<string | null>(null);
+  const netRef = useRef<NetClient | null>(null);
+  const stateRef = useRef<GameState | null>(null);
+  stateRef.current = state;
+
+  useEffect(() => {
+    let alive = true;
+    connect(config.url, { playerId: config.playerId, name: config.name })
+      .then((net) => {
+        if (!alive) {
+          net.leave();
+          return;
+        }
+        netRef.current = net;
+        net.onState((s) => setState(s));
+        net.onPresence((views) => setPresence(views.filter((v) => v.id !== config.playerId)));
+      })
+      .catch((e) => {
+        console.error('Multiplayer connection failed:', e);
+        setError(String(e?.message ?? e));
+      });
+    return () => {
+      alive = false;
+      netRef.current?.leave();
+      netRef.current = null;
+    };
+  }, [config.url, config.playerId, config.name]);
+
+  const dispatch = useCallback<React.Dispatch<Action>>(
+    (action) => {
+      const net = netRef.current;
+      if (!net) return;
+      // Movement is deterministic — predict it locally so it feels instant.
+      if (action.type === 'MOVE_STEP' && stateRef.current) {
+        setState(reduce(stateRef.current, action));
+      }
+      net.sendIntent(action);
+    },
+    [],
+  );
+
+  if (error) {
+    return (
+      <div className="mp-screen">
+        <h1>⚔️ Roonscep</h1>
+        <p>Couldn't reach the game server at <code>{config.url}</code>.</p>
+        <p className="muted small">{error}</p>
+        <p className="muted small">Is the server running? Drop the <code>?mp</code> URL param to play solo.</p>
+      </div>
+    );
+  }
+  if (!state) {
+    return (
+      <div className="mp-screen">
+        <h1>⚔️ Roonscep</h1>
+        <p>Connecting to {config.url}…</p>
+      </div>
+    );
+  }
+  return (
+    <StateCtx.Provider value={state}>
+      <DispatchCtx.Provider value={dispatch}>
+        <PresenceCtx.Provider value={presence}>{children}</PresenceCtx.Provider>
+      </DispatchCtx.Provider>
     </StateCtx.Provider>
   );
 }
@@ -124,4 +221,9 @@ export function useGame(): GameState {
 
 export function useDispatch(): React.Dispatch<Action> {
   return useContext(DispatchCtx);
+}
+
+/** Other players (multiplayer). Empty array in single-player. */
+export function usePresence(): PresenceView[] {
+  return useContext(PresenceCtx);
 }

@@ -54,16 +54,22 @@ Two properties of Roonscep make an authoritative MMO far easier than usual:
   uses a passed playerId), Neon Postgres impl (needs the account), and the Fly
   deploy. None block local development.
 
-- **Phase 2 — Intents, not mutations.** Client sends intent messages
-  (`MOVE`, `GATHER {x,y}`, `ATTACK {uid}`, `BUY`, `EQUIP`…). Server validates
-  each against authoritative state, applies via the shared reducer, persists.
-  This is what makes it an MMO: the client can't grant itself gear because it
-  only *asks*. Anti-cheat falls out of server-owned RNG + validation.
+- **Phase 2 — Intents, not mutations. ✅ DONE (wired path).** The React client
+  runs in opt-in multiplayer mode via `?mp` (single-player is the untouched
+  default). `src/net/*` connects to the room; `NetGameProvider` in store.tsx
+  provides the *same* context the whole UI already reads, so no panels changed.
+  `dispatch` sends the Action as an intent instead of reducing locally; the
+  server is authoritative and pushes state back. Movement is predicted locally
+  for feel, server reconciles. Other players render as models with nameplates
+  (`usePresence` → WorldView). Verified live: browser client + a headless bot
+  saw each other move in real time, "2 online" badge, and the client showed the
+  server's fresh state (not its localStorage save) — anti-cheat working.
 
-- **Phase 3 — State sync + interest management.** Colyseus schema for automatic
-  binary delta-sync. Area-of-interest: each client receives only nearby entities
-  (schema filters now, per-zone rooms when sharding). The renderer reads synced
-  state instead of local state; keeps its interpolation.
+- **Phase 3 — State sync + interest management.** Currently the server sends the
+  full GameState JSON each tick and broadcasts all presence to everyone — fine
+  for 5 players, but the optimization target. Colyseus schema for binary
+  delta-sync; area-of-interest so each client receives only nearby entities/
+  players (schema filters now, per-zone rooms when sharding).
 
 - **Phase 4 — Shared-world simulation.** One server tick owns all monsters and
   nodes — everyone sees the same goblin HP, the same depleted tree. Design calls

@@ -1,10 +1,10 @@
 import ReactDOM from 'react-dom/client';
 import App from './ui/App';
-import { GameProvider } from './state/store';
+import { GameRoot } from './state/store';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <GameProvider>
+  <GameRoot>
     <App />
-  </GameProvider>
+  </GameRoot>
 );

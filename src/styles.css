@@ -1080,3 +1080,44 @@ button {
   border-color: var(--gold-dim);
   background: rgba(217, 171, 79, 0.06);
 }
+
+/* multiplayer connect / error screen */
+.mp-screen {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+}
+
+.mp-screen h1 {
+  color: var(--gold-bright);
+  font-variant-caps: small-caps;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.mp-screen code {
+  color: var(--gold);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* other-player nameplate handled in three.js; this just reserves the badge look */
+.mp-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 8, 5, 0.78);
+  border: 1px solid rgba(127, 168, 217, 0.5);
+  color: var(--blue);
+  border-radius: 4px;
+  padding: 3px 12px;
+  font-size: 12.5px;
+  z-index: 6;
+  backdrop-filter: blur(3px);
+}

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { useDispatch, useGame } from '../state/store';
+import { useDispatch, useGame, usePresence } from '../state/store';
 import {
   BOSS_LAIRS, MAP_W, NPCS, STATIONS, StationType, isWalkable, zoneName,
 } from '../game/world';
 import { MONSTER_MAP } from '../game/monsters';
 import { GATHER_MAP } from '../game/actions';
 import { GameState, MonsterEntity } from '../game/types';
-import { buildWorld, tilePos, WorldHandles } from './three/worldBuilder';
-import { buildMonsterModel, buildPlayerModel, CharModel } from './three/models';
+import type { PresenceView } from '../net/types';
+import { buildWorld, makeTextSprite, tilePos, WorldHandles } from './three/worldBuilder';
+import { buildMonsterModel, buildPlayerModel, CharModel, PlayerModel } from './three/models';
 
 import { NpcDialog, StationDialog } from './Dialogs';
 import CombatHud from './CombatHud';
@@ -167,8 +168,11 @@ function makeHpBarSprite(): { sprite: THREE.Sprite; draw: (frac: number) => void
 export default function WorldView() {
   const s = useGame();
   const dispatch = useDispatch();
+  const presence = usePresence();
   const stateRef = useRef(s);
   stateRef.current = s;
+  const presenceRef = useRef(presence);
+  presenceRef.current = presence;
   const containerRef = useRef<HTMLDivElement>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -254,6 +258,52 @@ export default function WorldView() {
       world.interactables.add(model.group);
       entityModels.set(e.uid, model);
     }
+
+    // other players (multiplayer) — a model + nameplate per remote player,
+    // reconciled against presence each frame and glided toward their tile
+    interface Other {
+      model: PlayerModel;
+      label: THREE.Sprite;
+      tx: number;
+      ty: number;
+      eqKey: string;
+    }
+    const others = new Map<string, Other>();
+    const syncOthers = (dt: number, t: number) => {
+      const views = presenceRef.current;
+      const seen = new Set<string>();
+      for (const v of views) {
+        seen.add(v.id);
+        let o = others.get(v.id);
+        if (!o) {
+          const model = buildPlayerModel();
+          const label = makeTextSprite(v.name, '#9ad0ff', 0.32);
+          label.position.set(0, 1.6, 0);
+          model.group.add(label);
+          model.group.position.copy(tilePos(v.x, v.y));
+          scene.add(model.group);
+          o = { model, label, tx: v.x, ty: v.y, eqKey: '' };
+          others.set(v.id, o);
+        }
+        o.tx = v.x;
+        o.ty = v.y;
+        const eqKey = JSON.stringify(v.equipment);
+        if (eqKey !== o.eqKey) {
+          o.eqKey = eqKey;
+          o.model.setEquipment(v.equipment ?? {});
+        }
+        const target = tilePos(o.tx, o.ty);
+        const rem = moveTowards(o.model.group, target, PLAYER_SPEED, dt);
+        if (rem > 0.02) faceTowards(o.model.group, target, dt);
+        o.model.update(dt, t, Math.min(1, rem * 6), false);
+      }
+      for (const [id, o] of others) {
+        if (!seen.has(id)) {
+          scene.remove(o.model.group);
+          others.delete(id);
+        }
+      }
+    };
 
     // fight visuals: shared hp bar + target ring + lazy boss sprite
     const hpBar = makeHpBarSprite();
@@ -764,6 +814,9 @@ export default function WorldView() {
         if (adx * adx + ady * ady < 2500) a.tick(t);
       }
 
+      // other players (multiplayer)
+      syncOthers(mdt, t);
+
       // hover hint — throttled, and without the terrain mesh in the ray
       if (lastMouse && !dragging && now - lastHoverAt > 120) {
         lastHoverAt = now;
@@ -793,6 +846,8 @@ export default function WorldView() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       stopWalking();
+      for (const o of others.values()) scene.remove(o.model.group);
+      others.clear();
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
@@ -803,6 +858,7 @@ export default function WorldView() {
     <div className="world-wrap" ref={containerRef}>
       <div className="zone-label">{zoneName(s.world.px, s.world.py)}</div>
       {hover && <div className="hover-chip">{hover}</div>}
+      {presence.length > 0 && <div className="mp-badge">🌐 {presence.length + 1} online</div>}
       <CompassButton camRef={camRef} />
       {s.activity && s.activity.type !== 'combat' && (
         <button className="activity-chip" onClick={() => dispatch({ type: 'STOP' })} title="Click to stop">
