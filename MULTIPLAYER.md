@@ -78,9 +78,45 @@ Two properties of Roonscep make an authoritative MMO far easier than usual:
 - **Phase 5 — Hardening.** Reconnection, save-on-disconnect, intent
   rate-limiting, moderation (usernames + chat), ops/monitoring.
 
-## Open decisions (before Phase 1)
+## Run it locally
 
-- **One global room vs. per-zone rooms.** Start with one room for 5 players, but
-  keep state shaped so zone-splitting later is clean.
-- **What moves server-side first.** Recommended: movement + gathering + combat
-  (the shared-world essentials); pure-UI artisan screens last.
+```sh
+# terminal 1 — the authoritative server
+cd server && npm install && npm run dev      # ws://localhost:2567
+
+# terminal 2 — the client
+npm run dev                                  # http://localhost:5199
+```
+
+Open the client at `http://localhost:5199/?mp=1&name=You` for multiplayer, or
+plain `http://localhost:5199/` for single-player. `cd server && npm run test:client`
+runs a headless smoke test; `npm run bot` (tsx src/bot.ts) adds a wandering
+second player.
+
+## Deploying (when you have the accounts — the one blocked step)
+
+1. **Neon** (durable saves): create a project at neon.tech, copy the Postgres
+   connection string.
+2. **Fly** (game server): install `flyctl`, then from the repo root:
+   ```sh
+   fly launch --no-deploy          # names the app; edit fly.toml's app/region
+   fly secrets set DATABASE_URL="postgres://…neon…"
+   fly deploy
+   ```
+   The server picks up `DATABASE_URL` automatically (createPersistence()).
+3. **Point the client at it**: open the deployed client with
+   `?mp=wss://<your-app>.fly.dev`. (Optional next step: add a "Play Online"
+   button / `VITE_MP_SERVER` env so the Netlify site offers it without the URL
+   param — a small UI decision.)
+
+## Decisions still needed to go further
+
+- **Real accounts/auth.** Today identity is a stable per-browser id
+  (`roonscep-player-id`) passed as `playerId` — fine for a friends' beta, not
+  for real accounts. Decision: email/OAuth via the same Postgres, guest names,
+  or keep the browser-id approach for now?
+- **Phase 4 shared-world rules** (before unifying monsters): can two players tag
+  the same monster? Contested resource nodes or per-player? PvP anywhere?
+- **Phase 3 timing.** The full-JSON-per-tick sync is fine for 5 players; only
+  build schema deltas + interest management if a real player count needs it.
+  Recommend: deploy first, optimize only if measured.
