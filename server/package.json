@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "test:client": "tsx src/test-client.ts"
+    "test:client": "tsx src/test-client.ts",
+    "test:shared": "tsx src/test-shared.ts",
+    "bot": "tsx src/bot.ts"
   },
   "dependencies": {
     "colyseus": "^0.15.17",

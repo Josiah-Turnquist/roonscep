@@ -127,15 +127,29 @@ different layers, both needed** — Neon can't run the Colyseus WebSocket proces
 Fly can't store data. Neon Auth for accounts is a good call; Fly still hosts the
 server.
 
-## Phase 4 — shared world (decided, next to build)
+## Phase 4 — shared world
 
-Rules (from the owner): two players can tag the same monster; the monster
-attacks whichever tagger has the higher **combat level** (sum of fighting
-skills). Planned combat flow: monsters + nodes move from per-player GameState
-into ONE shared server world; each tick every engaged player deals their attack
-to the shared monster HP, and the monster deals one retaliation to the
-highest-combat engaged player. Loot/xp go to whoever lands the blow. This is a
-core-combat refactor — its own focused effort.
+Rules (from the owner): two players can tag one monster; each engaged player
+deals their own attack to the **shared** HP; the monster retaliates once against
+the highest-**combat-level** tagger. On death, loot lands on the ground where the
+monster fell — visible ONLY to the killing-blow player for **1 minute**, then to
+everyone. Kill credit + slayer/xp go to the killer.
+
+- **Step 1 — resolver. ✅ DONE + verified headless.** `src/game/shared.ts` is the
+  pure shared-world logic: `SharedWorld` (monsters with shared HP + damage
+  attribution, ground `GroundLoot` with owner + publicAt), `tickSharedWorld`
+  (resolve multi-tagger combat, retaliate at highest combat, drop owned loot,
+  wander/respawn, expire loot), `pickUpLoot` (owner-only until public),
+  `visibleLoot`. Engine mutators exported for reuse (no logic duplicated). Test:
+  `cd server && npm run test:shared` — proves both taggers hit shared HP,
+  higher-combat targeting, killer-owned loot, the 1-minute visibility window,
+  and public pickup after.
+- **Step 2 — wire into the room (server).** RoonscepRoom holds one SharedWorld;
+  its tick calls `tickSharedWorld`; the per-player reducer stops resolving combat
+  in MP (server owns it); sync shared monster positions/HP + each player's
+  visible ground loot into the broadcast; add a `pickup` intent.
+- **Step 3 — client rendering.** Render shared monsters (from synced state) and
+  ground-loot piles (click to pick up); the combat HUD reads the shared HP.
 
 ## Phase 3 timing
 

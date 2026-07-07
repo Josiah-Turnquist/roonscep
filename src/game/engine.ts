@@ -26,7 +26,7 @@ import { rng } from './rng';
 export const TICK_MS = 1200;
 export const MAX_OFFLINE_TICKS = 18000; // 6 hours
 const LOG_LIMIT = 80;
-const ENTITY_RESPAWN_TICKS = 25;
+export const ENTITY_RESPAWN_TICKS = 25;
 
 export type Action =
   | { type: 'TICK' }
@@ -112,7 +112,7 @@ export function initialState(): GameState {
 
 // ——— reducer helpers (operate on a cloned draft) ———
 
-function pushLog(s: GameState, text: string, kind: LogKind = 'info') {
+export function pushLog(s: GameState, text: string, kind: LogKind = 'info') {
   s.log.unshift({ id: s.logCounter++, text, kind });
   if (s.log.length > LOG_LIMIT) s.log.length = LOG_LIMIT;
 }
@@ -123,7 +123,7 @@ function pushFx(s: GameState, target: 'player' | 'monster', amount: number | nul
   if (s.fx.length > 12) s.fx.splice(0, s.fx.length - 12);
 }
 
-function addItem(s: GameState, itemId: string, qty: number) {
+export function addItem(s: GameState, itemId: string, qty: number) {
   s.inventory[itemId] = (s.inventory[itemId] ?? 0) + qty;
 }
 
@@ -135,12 +135,12 @@ function removeItem(s: GameState, itemId: string, qty: number): boolean {
   return true;
 }
 
-function addGold(s: GameState, amount: number) {
+export function addGold(s: GameState, amount: number) {
   s.gold += amount;
   s.stats.goldEarned += amount;
 }
 
-function grantXp(s: GameState, skill: SkillId, amount: number) {
+export function grantXp(s: GameState, skill: SkillId, amount: number) {
   if (amount <= 0) return;
   const before = levelForXp(s.xp[skill]);
   s.xp[skill] += Math.floor(amount);
@@ -160,7 +160,7 @@ function thieveChance(level: number, req: number): number {
   return Math.min(0.95, 0.55 + (level - req) * 0.01);
 }
 
-function randInt(min: number, max: number): number {
+export function randInt(min: number, max: number): number {
   return min + Math.floor(rng() * (max - min + 1));
 }
 
@@ -168,7 +168,7 @@ function cheb(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
 
-function die(s: GameState, causeName: string) {
+export function die(s: GameState, causeName: string) {
   const lost = Math.floor(s.gold * 0.1);
   s.gold -= lost;
   s.currentHp = maxHp(s);
@@ -197,7 +197,7 @@ function bestFoodId(s: GameState): string | null {
   return best;
 }
 
-function tryAutoEat(s: GameState) {
+export function tryAutoEat(s: GameState) {
   if (!s.settings.autoEat || s.currentHp <= 0) return;
   const threshold = Math.floor(maxHp(s) * s.settings.autoEatThreshold);
   let ate = 0;
@@ -248,7 +248,7 @@ function rollDrops(s: GameState, m: Monster) {
   }
 }
 
-function creditSlayerKill(s: GameState, m: Monster) {
+export function creditSlayerKill(s: GameState, m: Monster) {
   const task = s.slayerTask;
   if (!task || task.monsterId !== m.id) return;
   grantXp(s, 'slayer', m.hp);
